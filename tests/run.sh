@@ -200,6 +200,7 @@ attribution_once() {
 		bad "$1: attribution once on stderr, never on stdout" "stderr count $n"
 	fi
 }
+errlines() { grep -v -e '^Domain Rating by Ahrefs – ' -e 'install the getdr binary' "$tmp/$1.err" || true; }
 hint_count() { grep -c 'install the getdr binary' "$tmp/$1.err" || true; }
 
 # --- inputs -----------------------------------------------------------------
@@ -264,6 +265,25 @@ for c in args stdin dash crlf raw fresh sep; do
 	same "api-$c" "direct-$c"
 done
 check "--raw keeps the target as given (trimmed)" jq -e -s '.[0].target == "HTTPS://WWW.Raw.example/P"' "$tmp/direct-raw.out"
+
+echo "== invalid targets and IDN"
+# The acceptance list: whitespace (rejected locally), localhost (rejected by
+# Ahrefs with HTTP 400 for the whole batch), punycode and Unicode forms of one
+# IDN (one target after normalization).
+acc=(ahrefs.com 'exa mple.com' localhost github.com xn--e1afmkfd.xn--p1ai 'ПРИМЕР.РФ')
+: >"$tmp/curl.log"
+for m in api bin direct; do run "$m" "$m-acc" "${acc[@]}"; done
+same api-acc bin-acc
+same api-acc direct-acc
+for m in api bin direct; do check "$m-acc: exit 2" rc_is "$m-acc" 2; done
+check "api-acc: same stderr as the binary" cmp -s <(errlines api-acc) <(errlines bin-acc)
+check "acc: one line for the IDN, in Unicode" jq -e -s '[.[].target] == ["ahrefs.com", "exa mple.com", "localhost", "github.com", "пример.рф"]' "$tmp/direct-acc.out"
+check "acc: invalid targets have dr and checked_at null" jq -e -s '[.[] | select(.target == "exa mple.com" or .target == "localhost") | select(.dr == null and .checked_at == null and .cached == false)] | length == 2' "$tmp/direct-acc.out"
+check "direct-acc: invalid-target lines" cmp -s <(errlines direct-acc) <(printf 'getdr: invalid target: exa mple.com\ngetdr: invalid target: localhost\n')
+check "direct-acc: 400 isolated, rest resent (2 requests)" bash -c "[ \$(grep -c '^URL ' '$tmp/curl.log') = 2 ]"
+run direct direct-allbad 'exa mple.com' https://
+check "only invalid targets: exit 2, no request" bash -c "rc_ok=\$(cat '$tmp/direct-allbad.rc'); [ \$rc_ok = 2 ] && [ \$(grep -c '^URL ' '$tmp/curl.log') = 2 ]"
+check "only invalid targets: no key needed" bash -c "env -u GETDR_KEY -u AHREFS_KEY -u GETDR_API PATH='$clean_path' '$dr' 'exa mple.com' 2>/dev/null | jq -e '.dr == null' >/dev/null; [ \${PIPESTATUS[0]} = 2 ]"
 
 echo "== batching (2500 targets)"
 : >"$tmp/curl.log"
@@ -408,18 +428,40 @@ check "install.sh: nothing installed after a mismatch" test ! -e "$tmp/prefix/bi
 
 echo "== live"
 if [ -n "${AHREFS_KEY:-}" ]; then
-	rc=0
-	env -u GETDR_KEY -u GETDR_API PATH="$clean_path" "$dr" ahrefs.com https://www.index-pages.com/ \
-		>"$tmp/live.out" 2>"$tmp/live.err" || rc=$?
-	echo "$rc" >"$tmp/live.rc"
-	check "live direct: exit 0" rc_is live 0
-	contract live
-	check "live direct: ahrefs.com has a DR" jq -e -s '.[0].target == "ahrefs.com" and (.[0].dr | type) == "number"' "$tmp/live.out"
-	rc=0
-	env -u GETDR_KEY -u GETDR_API PATH="$tmp/bin:$clean_path" GETDR_CONFIG=/dev/null \
-		GETDR_CACHE_PATH="$tmp/live.db" "$dr" ahrefs.com https://www.index-pages.com/ \
-		>"$tmp/live-bin.out" 2>"$tmp/live-bin.err" || rc=$?
-	same live live-bin
+	# The acceptance list against the real Ahrefs API: the skill and the
+	# binary straight to Ahrefs, and both through a real getdr serve.
+	p_live=$(free_port)
+	LIVE=http://127.0.0.1:$p_live
+	env -u GETDR_KEY GETDR_CONFIG=/dev/null GETDR_CACHE_PATH="$tmp/serve-live.db" \
+		"$tmp/bin/getdr" serve --listen "127.0.0.1:$p_live" 2>"$tmp/serve-live.log" &
+	pids+=($!)
+	wait_up "$LIVE"
+	printf 'api = "%s"\n' "$LIVE" >"$tmp/live.toml"
+	live() { # name, then env assignments for the mode
+		local name=$1 rc=0
+		shift
+		env -u GETDR_KEY -u GETDR_API -u GETDR_SERVE_TOKEN GETDR_CONFIG=/dev/null \
+			GETDR_CACHE_PATH="$tmp/$name.db" "$@" "$dr" "${acc[@]}" >"$tmp/$name.out" 2>"$tmp/$name.err" || rc=$?
+		echo "$rc" >"$tmp/$name.rc"
+	}
+	live live-direct PATH="$clean_path"
+	live live-bin PATH="$tmp/bin:$clean_path"
+	live live-api PATH="$clean_path" GETDR_API="$LIVE" AHREFS_KEY=
+	live live-binapi PATH="$tmp/bin:$clean_path" GETDR_CONFIG="$tmp/live.toml" AHREFS_KEY=
+	contract live-direct
+	check "live direct: ahrefs.com and пример.рф have a DR" jq -e -s '(.[0].dr | type) == "number" and .[0].target == "ahrefs.com" and (.[4] | .target == "пример.рф" and (.dr | type) == "number")' "$tmp/live-direct.out"
+	same live-direct live-bin
+	same live-direct live-api
+	same live-direct live-binapi
+	for n in live-direct live-bin live-api live-binapi; do check "$n: exit 2" rc_is "$n" 2; done
+	check "live direct: same stderr as the binary" cmp -s <(errlines live-direct) <(errlines live-bin)
+	check "live api: same stderr as the binary" cmp -s <(errlines live-api) <(errlines live-binapi)
+	check "live direct: invalid-target lines" cmp -s <(errlines live-direct) <(printf 'getdr: invalid target: exa mple.com\ngetdr: invalid target: localhost\n')
+	for n in live-direct live-bin live-api live-binapi; do
+		printf '      %s:\n' "$n"
+		sed 's/^/        /' "$tmp/$n.out"
+		errlines "$n" | sed 's/^/        /'
+	done
 else
 	echo "skip  live check against api.ahrefs.com: AHREFS_KEY is not set"
 fi

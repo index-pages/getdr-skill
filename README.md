@@ -37,10 +37,19 @@ Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdi
 (default `dr3`), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
 
 Targets are normalized exactly like getdr does: a URL becomes its host, userinfo and port are dropped,
-`www.` is removed, everything is lower-cased and duplicates are removed, keeping the first occurrence.
+`www.` is removed, everything is lower-cased, punycode labels (`xn--…`) are decoded to Unicode (so
+`xn--e1afmkfd.xn--p1ai` and `ПРИМЕР.РФ` are both `пример.рф`) and duplicates are removed, keeping the first
+occurrence.
 One limitation on the direct path: only ASCII, Latin-1, Latin Extended-A and Additional, Greek, Cyrillic,
 Armenian and fullwidth Latin letters are lower-cased; upper-case letters of other scripts (e.g. Latin
 Extended-B, Georgian) are sent as written, while getdr would lower-case them.
+
+Invalid targets don't spoil the rest of the list, as in getdr. Input with no host, whitespace or control
+characters is never sent; on the direct path, a target Ahrefs refuses (it fails the whole batch with HTTP
+400 naming the target, e.g. `localhost`) is dropped from the batch and the rest is resent. Each one gets
+`getdr: invalid target: X` on stderr, `dr` and `checked_at` `null`, and exit code 2. Through a getdr
+server, a target the server's Ahrefs refuses comes back as "no response", exactly as the getdr CLI
+reports it.
 
 ## Backends
 
@@ -68,13 +77,13 @@ the getdr MCP server:
 | field | |
 |---|---|
 | `target` | normalized target (as given with `--raw`) |
-| `dr` | number, or `null` when Ahrefs has no data or did not answer; `0` is a value |
+| `dr` | number, or `null` for an invalid target, no response or no data; Ahrefs answers `0` for unknown domains |
 | `version` | `dr3` or `dr4`; the two formulas give values that are not comparable |
 | `checked_at` | RFC 3339 UTC; `null` only when there was no response |
 | `cached` | `true` when served from a getdr cache; always `false` on the direct path |
 
-Exit codes: `0` ok, `2` error or targets without a response (still printed, with `dr` and `checked_at`
-`null`), `3` Ahrefs API key missing or rejected (nothing on stdout).
+Exit codes: `0` ok, `2` error, invalid targets or targets without a response (still printed, with `dr`
+and `checked_at` `null`), `3` Ahrefs API key missing or rejected (nothing on stdout).
 
 ## Attribution
 

@@ -18,6 +18,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `GETDR_KEY` / `AHREFS_KEY` (target normalization like getdr, batches of
   1000, retries with backoff on 429/5xx, timeouts); `--version dr3|dr4`,
   `--fresh`, `--raw`, `-f FILE`, stdin; exit codes 0, 2 and 3 as in getdr.
+  Like getdr, punycode labels are decoded to Unicode, and invalid targets
+  (rejected locally, or named by an Ahrefs HTTP 400 and resent without) are
+  reported as `getdr: invalid target: X` with exit code 2.
 - `scripts/install.sh`: installs the getdr binary from GitHub Releases with
   SHA-256 verification.
 - `tests/run.sh`: end-to-end tests of all backends against the getdr mock

@@ -24,7 +24,12 @@ scripts/dr.sh --fresh saas.com                # bypass caches and refetch
 ```
 
 Domains and URLs both work: a URL is reduced to its host, `www.` is dropped, everything is
-lower-cased and duplicates are removed. `--raw` sends targets exactly as given.
+lower-cased, punycode (`xn--…`) is decoded to Unicode and duplicates are removed. `--raw` sends
+targets exactly as given.
+
+A target that is not a domain or URL (no host, whitespace, or refused by Ahrefs, such as
+`localhost`) gets `dr` and `checked_at` `null`, a `getdr: invalid target: X` line on stderr and
+exit code 2; the other targets are still checked.
 
 ## Output
 
@@ -35,14 +40,15 @@ de-duplication, and nothing else:
 {"target":"saas.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
 ```
 
-- `dr`: number (`0` is a real value) or `null` when Ahrefs has no data or did not answer.
+- `dr`: number, or `null` when the target was invalid, got no response or Ahrefs has no data.
+  Ahrefs answers `0` for domains it does not know, so `0` is a real value, not an error.
 - `checked_at`: RFC 3339 UTC time of the measurement; `null` only when there was no response.
 - `cached`: `true` when the value came from a cache (a getdr binary or server).
 - `version`: `dr3` and `dr4` are different formulas. Never compare or mix their values; when
   comparing domains, use one version for all of them.
 
 stderr carries errors and one attribution line. Exit codes: `0` ok (no-data targets included),
-`2` error or some targets without a response (their lines are still printed), `3` Ahrefs API key
+`2` error, invalid targets or targets without a response (their lines are still printed), `3` Ahrefs API key
 missing or rejected (nothing on stdout; the message links to https://index-pages.com/getdr#key).
 
 When you show DR values to the user, credit the source: "Domain Rating by Ahrefs".

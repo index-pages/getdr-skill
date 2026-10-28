@@ -17,12 +17,13 @@
 # Output (every backend): NDJSON, in input order after normalization and
 # de-duplication, exactly like getdr --format json:
 #   {"target":"x.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
-# dr is null when there is no data or no response; checked_at is null only
-# when there was no response. stderr gets error lines and, once, the
+# dr is null for an invalid target, no response or no data; checked_at is
+# null only for an invalid target or no response. stderr gets error lines
+# ("getdr: invalid target: X" for each invalid one) and, once, the
 # attribution "Domain Rating by Ahrefs – https://ahrefs.com/".
 #
-# Exit codes: 0 ok, 2 error or targets without a response, 3 Ahrefs API key
-# missing or rejected (nothing on stdout).
+# Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
+# 3 Ahrefs API key missing or rejected (nothing on stdout).
 #
 # Needs bash, curl and jq 1.6 or newer; with the getdr binary (backend 2)
 # only bash.
@@ -56,7 +57,8 @@ Flags:
   -h, --help         show this help
 
 Backends: GETDR_API (getdr server), getdr on PATH, GETDR_KEY / AHREFS_KEY.
-Exit codes: 0 ok, 2 error or targets without a response, 3 key missing or rejected.
+Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
+3 key missing or rejected.
 
 Domain Rating by Ahrefs – https://ahrefs.com/
 Docs: https://index-pages.com/getdr
@@ -125,6 +127,10 @@ esac
 # --- backend 2: the getdr binary does everything itself ---------------------
 
 api=$(printf '%s' "${GETDR_API:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's:/*$::')
+case $api in
+"" | http://* | https://*) ;;
+*) die 2 "GETDR_API must start with http:// or https://" ;;
+esac
 if [ -z "$api" ] && command -v getdr >/dev/null 2>&1; then
 	rc=0
 	out=$(getdr --format json -q --version "$version" ${orig[@]+"${orig[@]}"}) || rc=$?
@@ -139,7 +145,7 @@ fi
 
 # Target normalization, identical to getdr's internal/target: URL -> host,
 # userinfo and port dropped, lower-case, one trailing dot and one leading
-# "www." removed. gotrim matches Go's strings.TrimSpace, golower Go's
+# "www." removed, xn-- labels decoded (RFC 3492). gotrim matches Go's strings.TrimSpace, golower Go's
 # strings.ToLower for ASCII, Latin-1, Latin Extended-A and Additional, Greek,
 # Cyrillic, Armenian and fullwidth Latin. Upper-case letters of other scripts
 # (e.g. Latin Extended-B, Georgian) are not lower-cased here, unlike in getdr.
@@ -200,6 +206,53 @@ def splithost:
   if test("\\A[^\\[\\]:]*:[^\\[\\]:]*\\z") then sub(":[^\\[\\]:]*\\z"; "")
   elif test("\\A\\[[^\\[\\]]*\\]:[^\\[\\]:]*\\z") then sub("\\A\\[(?<h>[^\\[\\]]*)\\]:[^\\[\\]:]*\\z"; "\(.h)")
   else . end;
+def pdigit: if . >= 48 and . <= 57 then . - 22 elif . >= 65 and . <= 90 then . - 65
+  elif . >= 97 and . <= 122 then . - 97 else -1 end;
+def padapt($delta; $points; $first):
+  (if $first then $delta / 700 else $delta / 2 end | floor) as $d
+  | [$d + ($d / $points | floor), 0]
+  | until(.[0] <= 455; [(.[0] / 35 | floor), .[1] + 36])
+  | .[1] + (36 * .[0] / (.[0] + 38) | floor);
+def pstep($in):
+  .oldi = .i | .w = 1 | .k = 36 | .done = false
+  | until(.done or .fail;
+      if .pos >= ($in | length) then .fail = true
+      else ($in[.pos] | pdigit) as $d
+        | .pos += 1
+        | if $d < 0 or $d > ((2147483647 - .i) / .w | floor) then .fail = true
+          else .i += $d * .w
+            | (.k - .bias | if . < 1 then 1 elif . > 26 then 26 else . end) as $t
+            | if $d < $t then .done = true
+              elif .w > (2147483647 / (36 - $t) | floor) then .fail = true
+              else .w *= 36 - $t | .k += 36 end
+          end
+      end)
+  | if .fail then .
+    else (.out | length + 1) as $np
+      | .bias = padapt(.i - .oldi; $np; .oldi == 0)
+      | if (.i / $np | floor) > 2147483647 - .n then .fail = true
+        else .n += (.i / $np | floor) | .i %= $np
+          | if .n > 1114111 or (.n >= 55296 and .n <= 57343) then .fail = true
+            else .out = .out[:.i] + [.n] + .out[.i:] | .i += 1 end
+        end
+    end;
+def punydecode:
+  explode as $cs
+  | ([range($cs | length) as $x | select($cs[$x] == 45) | $x] | last) as $b
+  | (if $b == null then [[], $cs] else [$cs[:$b], $cs[$b + 1:]] end) as [$basic, $in]
+  | if any($basic[]; . >= 128) then null
+    else {out: $basic, n: 128, i: 0, bias: 72, pos: 0, fail: false}
+      | until(.fail or .pos >= ($in | length); pstep($in))
+      | if .fail then null else .out | implode end
+    end;
+def tounicode:
+  if test("xn--") | not then .
+  else split(".")
+    | map(if length > 4 and (.[:4] | ascii_downcase) == "xn--"
+          then (.[4:] | punydecode) as $u | if $u == null or $u == "" then . else $u | golower end
+          else . end)
+    | join(".")
+  end;
 def norm:
   gotrim
   | if test("://") then sub("\\A[\\s\\S]*?://"; "") else sub("\\A//"; "") end
@@ -208,7 +261,11 @@ def norm:
   | splithost
   | golower
   | sub("\\.\\z"; "")
+  | tounicode
   | sub("\\Awww\\."; "");
+def badchar: explode | any(.[]; . <= 32 or (. >= 127 and . <= 160) or . == 5760
+  or (. >= 8192 and . <= 8202) or . == 8232 or . == 8233 or . == 8239 or . == 8287 or . == 12288);
+def valid: (norm != "") and (badchar | not);
 def dedup:
   reduce .[] as $t ({seen: {}, out: []};
     if $t == "" or .seen[$t] then . else .seen[$t] = true | .out += [$t] end)
@@ -243,7 +300,11 @@ trap 'exit 143' TERM
 prepare='
   ($args | split("\u0000") | .[:-1]) as $a
   | ($a + (split("\n") | map(gotrim | select(. != "" and (startswith("#") | not))))) as $in
-  | {n: ($in | length), t: ($in | map(if $raw then gotrim else norm end) | dedup)}'
+  | {n: ($in | length),
+     t: ($in | map(gotrim | select(. != "") | if $raw then . else (norm as $n | if $n == "" then . else $n end) end)
+          | dedup)}
+  | .v = (.t | map(select(valid)))
+  | .bad = [.t[] | select(valid | not)]'
 read_stdin=false
 if $have_file; then
 	if [ "$file" = - ]; then
@@ -270,16 +331,16 @@ if [ ${#targets[@]} -gt 0 ]; then printf '%s\0' "${targets[@]}" >"$tmp/args"; fi
 jq -Rsc --argjson raw "$raw" --rawfile args "$tmp/args" "$JQ_LIB $prepare" <"$src" >"$tmp/prepared.json"
 [ "$(jq .n "$tmp/prepared.json")" -gt 0 ] || die 2 "no targets"
 jq -c .t "$tmp/prepared.json" >"$tmp/targets.json"
-count=$(jq length "$tmp/targets.json")
-[ "$count" -gt 0 ] || die 2 "no valid targets"
+[ "$(jq length "$tmp/targets.json")" -gt 0 ] || die 2 "no valid targets"
+# Targets without a host or with whitespace or control characters are
+# invalid and never sent, like in getdr.
+jq -c .v "$tmp/prepared.json" >"$tmp/valid.json"
+jq -c --arg v "$version" "$JQ_LIB"'.bad[] | record($v) + {inv: true}' "$tmp/prepared.json" >"$tmp/results"
+count=$(jq length "$tmp/valid.json")
 
 key=${GETDR_KEY:-}
 [ -n "$key" ] || key=${AHREFS_KEY:-}
 key=$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-if [ -z "$api" ] && [ -z "$key" ]; then
-	die 3 "no getdr server (GETDR_API), getdr binary or Ahrefs API key (GETDR_KEY, AHREFS_KEY) found. Get a free key: $KEY_HELP"
-fi
-need curl "https://curl.se/"
 
 # curl with ~/.curlrc ignored (-q must come first) and the secret headers in a
 # file, so keys and tokens never show up in the process list.
@@ -301,8 +362,13 @@ noresponse() { # reason -> no-response records for all targets in $tmp/batch.jso
 	jq -c --arg v "$version" --arg err "$1" "$JQ_LIB"'.[] | record($v) + {err: $err}' "$tmp/batch.json"
 }
 
-# Print the records, report targets without a response, exit 0 or 2.
+# Print the records in target order, report invalid targets and targets
+# without a response like getdr does, exit 0 or 2.
 finish() {
+	jq -cs --slurpfile t "$tmp/targets.json" \
+		'(map({key: .target, value: .}) | from_entries) as $m | $t[0][] | $m[.]' \
+		"$tmp/results" >"$tmp/ordered"
+	jq -r 'select(.inv) | "getdr: invalid target: \(.target)"' "$tmp/ordered" >&2
 	jq -rs '
 	  [.[] | select(.err)]
 	  | reduce .[] as $x ([]; if any(.[]; .r == $x.err)
@@ -311,33 +377,36 @@ finish() {
 	  | .[]
 	  | "getdr: no response for \(.t | length) target(s): \(.r): "
 	    + (if (.t | length) > 10 then (.t[:10] | join(", ")) + " and \(.t | length - 10) more"
-	       else .t | join(", ") end)' "$tmp/results" >&2
-	jq -c '{target, dr, version, checked_at, cached}' "$tmp/results"
+	       else .t | join(", ") end)' "$tmp/ordered" >&2
+	jq -c '{target, dr, version, checked_at, cached}' "$tmp/ordered"
 	printf '%s\n' "$ATTRIBUTION" >&2
 	if [ -n "${1:-}" ]; then printf '%s\n' "$1" >&2; fi
-	if jq -se 'any(.[]; .err)' "$tmp/results" >/dev/null; then exit 2; fi
+	if jq -se 'any(.[]; .err or .inv)' "$tmp/ordered" >/dev/null; then exit 2; fi
 	exit 0
 }
+
+# Only invalid targets: nothing to ask, no key needed.
+[ "$count" -gt 0 ] || finish
+if [ -z "$api" ] && [ -z "$key" ]; then
+	die 3 "no getdr server (GETDR_API), getdr binary or Ahrefs API key (GETDR_KEY, AHREFS_KEY) found. Get a free key: $KEY_HELP"
+fi
+need curl "https://curl.se/"
 
 # --- backend 1: a getdr server ----------------------------------------------
 
 if [ -n "$api" ]; then
-	case $api in
-	http://* | https://*) ;;
-	*) die 2 "GETDR_API must start with http:// or https://" ;;
-	esac
 	{
 		printf 'Content-Type: application/json\nAccept: application/json\n'
 		if [ -n "${GETDR_SERVE_TOKEN:-}" ]; then printf 'Authorization: Bearer %s\n' "$GETDR_SERVE_TOKEN"; fi
 	} >"$tmp/headers"
 	jq -c --arg v "$version" --argjson fresh "$fresh" --argjson raw "$raw" \
-		'{targets: ., version: $v, fresh: $fresh, raw: $raw}' "$tmp/targets.json" >"$tmp/body"
-	cp "$tmp/targets.json" "$tmp/batch.json"
+		'{targets: ., version: $v, fresh: $fresh, raw: $raw}' "$tmp/valid.json" >"$tmp/body"
+	cp "$tmp/valid.json" "$tmp/batch.json"
 	batches=$(((count + BATCH - 1) / BATCH))
 	post "$api/dr" "$tmp/body" $((TIMEOUT * (RETRIES + 1) * batches + 30))
 	server="getdr server $api"
 	if [ -n "$cerr" ]; then
-		noresponse "$server: $cerr" >"$tmp/results"
+		noresponse "$server: $cerr" >>"$tmp/results"
 	elif [ "$code" = 200 ]; then
 		jq -c --arg v "$version" --arg s "$server" --rawfile resp "$tmp/resp" "$JQ_LIB"'
 		  ($resp | try (fromjson | [.]) catch null) as $r
@@ -351,15 +420,15 @@ if [ -n "$api" ]; then
 		        elif $x.checked_at == null then $t | record($v) + {err: "\($s): no response from Ahrefs"}
 		        else {target: $t, dr: ($x.dr | num), version: $v, checked_at: $x.checked_at, cached: ($x.cached == true)}
 		        end
-		    end' "$tmp/targets.json" >"$tmp/results"
+		    end' "$tmp/valid.json" >>"$tmp/results"
 	elif [ "$code" = 503 ]; then
 		msg="$server: $(errtext)"
 		case $msg in *"$KEY_HELP"*) ;; *) msg="$msg; see $KEY_HELP" ;; esac
 		die 3 "$msg"
 	elif [ "$code" = 401 ]; then
-		noresponse "$server: $(errtext) (set GETDR_SERVE_TOKEN)" >"$tmp/results"
+		noresponse "$server: $(errtext) (set GETDR_SERVE_TOKEN)" >>"$tmp/results"
 	else
-		noresponse "$server: HTTP $code: $(errtext)" >"$tmp/results"
+		noresponse "$server: HTTP $code: $(errtext)" >>"$tmp/results"
 	fi
 	finish
 fi
@@ -368,10 +437,10 @@ fi
 
 printf 'Authorization: Bearer %s\nContent-Type: application/json\nAccept: application/json\n' "$key" >"$tmp/headers"
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-: >"$tmp/results"
 
 # One batch with retries on 429, 5xx and network errors (backoff 1s, 2s, 4s
-# or Retry-After, at most 60s). Sets outcome to ok, fail or key, and reason.
+# or Retry-After, at most 60s). Sets outcome to ok, fail, key or invalid
+# (HTTP 400 naming one target of the batch, in $bad), and reason.
 fetch_batch() {
 	attempt=0
 	while :; do
@@ -397,6 +466,15 @@ fetch_batch() {
 				reason="HTTP $code: $(errtext)"
 				wait_s=$(sed -n 's/^[Rr][Ee][Tt][Rr][Yy]-[Aa][Ff][Tt][Ee][Rr]:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' "$tmp/head" | tail -n 1)
 				;;
+			400)
+				reason="HTTP $code: $(errtext)"
+				bad=$(jq -jr --rawfile resp "$tmp/resp" "$JQ_LIB"'
+				  . as $batch
+				  | ($resp | errtext | [match("invalid domain or url: \u0027(.*)\u0027\\s*\\z").captures[0].string]) as $x
+				  | $batch[] | select(. == $x[0])' "$tmp/batch.json")
+				if [ -n "$bad" ]; then outcome=invalid; else outcome=fail; fi
+				return
+				;;
 			*)
 				outcome=fail reason="HTTP $code: $(errtext)"
 				return
@@ -420,16 +498,30 @@ batches=$(((count + BATCH - 1) / BATCH))
 i=0
 while [ "$i" -lt "$batches" ]; do
 	if [ "$i" -gt 0 ]; then sleep 1.5; fi
-	jq -c ".[$((i * BATCH)):$(((i + 1) * BATCH))]" "$tmp/targets.json" >"$tmp/batch.json"
-	jq -c --arg v "$version" '{targets: ., version: $v}' "$tmp/batch.json" >"$tmp/body"
-	fetch_batch
+	jq -c ".[$((i * BATCH)):$(((i + 1) * BATCH))]" "$tmp/valid.json" >"$tmp/batch.json"
+	# Ahrefs fails a whole batch with HTTP 400 when one target is not a
+	# domain or URL and names it: mark that one invalid and resend the rest
+	# (a new request, not a retry) until the batch passes or is empty.
+	outcome=empty
+	while [ "$(jq length "$tmp/batch.json")" -gt 0 ]; do
+		jq -c --arg v "$version" '{targets: ., version: $v}' "$tmp/batch.json" >"$tmp/body"
+		fetch_batch
+		[ "$outcome" = invalid ] || break
+		jq -nc --arg v "$version" --arg x "$bad" "$JQ_LIB"'$x | record($v) + {inv: true}' >>"$tmp/results"
+		jq -c --arg x "$bad" 'map(select(. != $x))' "$tmp/batch.json" >"$tmp/batch.next"
+		mv "$tmp/batch.next" "$tmp/batch.json"
+		outcome=empty
+		sleep 1.5
+	done
 	case $outcome in
+	empty) ;;
 	key) die 3 "$reason" ;;
 	fail) noresponse "$reason" >>"$tmp/results" ;;
 	ok)
 		# Same matching as getdr: each response item is used at most once.
-		# First by name (the item's target as sent, lower-cased or
-		# normalized; the first item wins a name), then, when the counts
+		# First by name (exact, lower-cased, then getdr-normalized on both
+		# sides, as items echo "a.com/"; the first item wins a name), then,
+		# when the counts
 		# match, a target without a name match takes the item at its own
 		# position if no other target claimed it. An error, a null or a
 		# missing rating is "no data"; 0 is a value.
@@ -451,7 +543,7 @@ while [ "$i" -lt "$batches" ]; do
 		          | reduce ($t, ($t | golower), ($t | norm)) as $k (.;
 		              if $k == "" or has($k) then . else .[$k] = $j end))) as $by
 		      | (reduce range($batch | length) as $i ({named: [], used: {}};
-		          ($by[$batch[$i]] // $by[$batch[$i] | golower]) as $j
+		          ($by[$batch[$i]] // $by[$batch[$i] | golower] // $by[$batch[$i] | norm]) as $j
 		          | if $j != null and (.used[$j | tostring] | not)
 		            then .named += [$j] | .used[$j | tostring] = true
 		            else .named += [null] end)) as $m
