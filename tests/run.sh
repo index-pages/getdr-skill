@@ -288,11 +288,15 @@ check "no backend: exit 3" rc_is none 3
 check "no backend: link to the key page" grep -q 'https://index-pages.com/getdr#key' "$tmp/none.err"
 check "no backend: nothing on stdout" test ! -s "$tmp/none.out"
 
-# Response matching: an item matched by name is never reused by the
-# position fallback (regression: b.com used to get a.com's 77).
+# Response matching, as in getdr: each item is used at most once, names
+# (also normalized) first, then position (regression: b.com used to get
+# a.com's 77).
 printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"https://b.com/","domain_rating":5},{"target":"a.com","domain_rating":77}]}}' >"$tmp/canned1.json"
 AHREFS_CANNED=$tmp/canned1.json run direct direct-match1 a.com b.com
-check "matching: name match wins, no reuse by position" bash -c "[ \"\$(cat '$tmp/direct-match1.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",77][\"b.com\",null]' ]"
+check "matching: normalized item names, no reuse by position" bash -c "[ \"\$(cat '$tmp/direct-match1.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",77][\"b.com\",5]' ]"
+printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"zzz","domain_rating":5},{"target":"a.com","domain_rating":77}]}}' >"$tmp/canned4.json"
+AHREFS_CANNED=$tmp/canned4.json run direct direct-match4 a.com b.com
+check "matching: a slot claimed by name is not reused by position" bash -c "[ \"\$(cat '$tmp/direct-match4.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",77][\"b.com\",null]' ]"
 printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"A.COM","domain_rating":11},{"target":"x","domain_rating":22},{"target":"c.com","domain_rating":0}]}}' >"$tmp/canned2.json"
 AHREFS_CANNED=$tmp/canned2.json run direct direct-match2 a.com b.com c.com
 check "matching: lower-cased name, position fallback, 0 is a value" bash -c "[ \"\$(cat '$tmp/direct-match2.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",11][\"b.com\",22][\"c.com\",0]' ]"

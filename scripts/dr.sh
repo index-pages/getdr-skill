@@ -427,11 +427,12 @@ while [ "$i" -lt "$batches" ]; do
 	key) die 3 "$reason" ;;
 	fail) noresponse "$reason" >>"$tmp/results" ;;
 	ok)
-		# Same matching as getdr: by target, then lower-cased; when the
-		# counts match, a target without a name match falls back to the
-		# item at its own position, unless that item was already matched
-		# by name. An error, a null or a missing rating is "no data"; 0 is
-		# a value.
+		# Same matching as getdr: each response item is used at most once.
+		# First by name (the item's target as sent, lower-cased or
+		# normalized; the first item wins a name), then, when the counts
+		# match, a target without a name match takes the item at its own
+		# position if no other target claimed it. An error, a null or a
+		# missing rating is "no data"; 0 is a value.
 		jq -c --arg v "$version" --arg now "$now" --rawfile resp "$tmp/resp" "$JQ_LIB"'
 		  def opt($types): (type) as $t | any($types[]; . == $t);
 		  . as $batch
@@ -446,9 +447,16 @@ while [ "$i" -lt "$batches" ]; do
 		    else
 		      ($items | map(. // {})) as $items
 		      | (reduce range($items | length) as $j ({};
-		          ($items[$j].target // "") as $t | .[$t] = $j | .[$t | golower] = $j)) as $by
-		      | [$batch[] as $t | $by[$t] // $by[$t | golower]] as $named
-		      | (reduce ($named[] | select(. != null)) as $j ({}; .[$j | tostring] = true)) as $used
+		          ($items[$j].target // "") as $t
+		          | reduce ($t, ($t | golower), ($t | norm)) as $k (.;
+		              if $k == "" or has($k) then . else .[$k] = $j end))) as $by
+		      | (reduce range($batch | length) as $i ({named: [], used: {}};
+		          ($by[$batch[$i]] // $by[$batch[$i] | golower]) as $j
+		          | if $j != null and (.used[$j | tostring] | not)
+		            then .named += [$j] | .used[$j | tostring] = true
+		            else .named += [null] end)) as $m
+		      | $m.named as $named
+		      | $m.used as $used
 		      | range($batch | length) as $i
 		      | $batch[$i] as $t
 		      | ($named[$i]
