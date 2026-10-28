@@ -90,7 +90,9 @@ getdr is not affiliated with Ahrefs.
 `scripts/dr.sh` connects to `GETDR_API` or `api.ahrefs.com` and nowhere else; `scripts/install.sh` only
 to the release download URL. No telemetry, no update checks, no analytics. Requests carry the User-Agent
 `getdr/0.1.0 (+https://index-pages.com/getdr)`. Keys and tokens are passed to curl in a temporary file
-(mode 600), never on the command line.
+(mode 600), never on the command line. curl honours the standard `HTTP_PROXY`, `HTTPS_PROXY` and
+`NO_PROXY` environment variables; if you use a proxy and a getdr server on your LAN, add the server to
+`NO_PROXY`.
 
 ## Tests
 
