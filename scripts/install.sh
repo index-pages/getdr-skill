@@ -14,7 +14,6 @@
 
 set -eu
 
-# PLACEHOLDER: release download URL; the getdr repository is not published yet.
 RELEASES_URL="https://github.com/index-pages/getdr/releases/download"
 
 version=${1:-0.1.0}
