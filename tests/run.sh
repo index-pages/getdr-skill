@@ -104,21 +104,32 @@ wait_up "$API"
 wait_up "$LOCKED"
 
 # curl shim for the direct backend: rewrite api.ahrefs.com to $AHREFS_TARGET
-# (default the fake Ahrefs) and log the URL and User-Agent of each call.
+# (default the fake Ahrefs) and log the URL and User-Agent of each call. With
+# AHREFS_CANNED set, answer 200 with that file instead of calling anything.
 cat >"$tmp/shim/curl" <<EOF
 #!/usr/bin/env bash
 target=\${AHREFS_TARGET:-http://127.0.0.1:$p_ahrefs}
 a=()
 ua=
 prev=
+out=
+head=
 for x in "\$@"; do
 	case \$x in https://api.ahrefs.com/*) x=\$target/\${x#https://api.ahrefs.com/} ;; esac
 	[ "\$prev" = -A ] && ua=\$x
+	[ "\$prev" = -o ] && out=\$x
+	[ "\$prev" = -D ] && head=\$x
 	case \$x in http://* | https://*) printf 'URL %s\n' "\$x" >>"$tmp/curl.log" ;; esac
 	prev=\$x
 	a+=("\$x")
 done
 printf 'UA %s\n' "\$ua" >>"$tmp/curl.log"
+if [ -n "\${AHREFS_CANNED:-}" ]; then
+	cp "\$AHREFS_CANNED" "\$out"
+	printf 'HTTP/1.1 200 OK\r\n\r\n' >"\$head"
+	printf 200
+	exit 0
+fi
 exec "$(command -v curl)" "\${a[@]}"
 EOF
 chmod +x "$tmp/shim/curl"
@@ -277,6 +288,18 @@ check "no backend: exit 3" rc_is none 3
 check "no backend: link to the key page" grep -q 'https://index-pages.com/getdr#key' "$tmp/none.err"
 check "no backend: nothing on stdout" test ! -s "$tmp/none.out"
 
+# Response matching: an item matched by name is never reused by the
+# position fallback (regression: b.com used to get a.com's 77).
+printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"https://b.com/","domain_rating":5},{"target":"a.com","domain_rating":77}]}}' >"$tmp/canned1.json"
+AHREFS_CANNED=$tmp/canned1.json run direct direct-match1 a.com b.com
+check "matching: name match wins, no reuse by position" bash -c "[ \"\$(cat '$tmp/direct-match1.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",77][\"b.com\",null]' ]"
+printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"A.COM","domain_rating":11},{"target":"x","domain_rating":22},{"target":"c.com","domain_rating":0}]}}' >"$tmp/canned2.json"
+AHREFS_CANNED=$tmp/canned2.json run direct direct-match2 a.com b.com c.com
+check "matching: lower-cased name, position fallback, 0 is a value" bash -c "[ \"\$(cat '$tmp/direct-match2.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",11][\"b.com\",22][\"c.com\",0]' ]"
+printf '%s' '{"domain_rating":{"license":"x","targets":[{"target":"zzz","domain_rating":9}]}}' >"$tmp/canned3.json"
+AHREFS_CANNED=$tmp/canned3.json run direct direct-match3 a.com b.com
+check "matching: no position fallback when the counts differ" bash -c "[ \"\$(cat '$tmp/direct-match3.out' | jq -c '[.target, .dr]' | tr -d '\n')\" = '[\"a.com\",null][\"b.com\",null]' ]"
+
 KEY=bad run direct direct-badkey a.example
 check "rejected key: exit 3, nothing on stdout" bash -c "[ \$(cat '$tmp/direct-badkey.rc') = 3 ] && [ ! -s '$tmp/direct-badkey.out' ]"
 check "rejected key: message" grep -q 'Ahrefs API key rejected by Ahrefs (HTTP 401: Unauthorized); see https://index-pages.com/getdr#key' "$tmp/direct-badkey.err"
@@ -326,6 +349,14 @@ check "Ahrefs down: exit 2" rc_is direct-dead 2
 check "Ahrefs down: dr and checked_at null" jq -e -s 'length == 2 and all(.[]; .dr == null and .checked_at == null)' "$tmp/direct-dead.out"
 check "Ahrefs down: after 3 retries" grep -q '^getdr: no response for 2 target(s): .*(after 3 retries): a.example, b.example$' "$tmp/direct-dead.err"
 check "Ahrefs down: 4 attempts" bash -c "[ \$(grep -c '^URL $DEAD/' '$tmp/curl.log') = 4 ]"
+
+mkdir -p "$tmp/oldjq"
+# shellcheck disable=SC2016 # a script for the shim, expanded there
+printf '#!/usr/bin/env bash\n[ "$1" = --version ] && { echo jq-1.5-1-a5b5cbe; exit 0; }\nexec %s "$@"\n' "$(command -v jq)" >"$tmp/oldjq/jq"
+chmod +x "$tmp/oldjq/jq"
+rc=0
+env -u GETDR_API PATH="$tmp/oldjq:$tmp/shim:$clean_path" GETDR_KEY=k "$dr" a.example >"$tmp/oldjq.out" 2>"$tmp/oldjq.err" || rc=$?
+check "jq 1.5: exit 2 with a clear message" bash -c "[ $rc = 2 ] && grep -q 'needs jq 1.6 or newer, found jq-1.5' '$tmp/oldjq.err' && [ ! -s '$tmp/oldjq.out' ]"
 
 for m in api bin direct; do
 	run "$m" "$m-noargs" </dev/null

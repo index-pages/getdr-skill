@@ -58,6 +58,6 @@ The script picks the first that applies; the output is the same either way:
 With none of them, the script exits with code 3. Tell the user they need a free Ahrefs API key
 (https://index-pages.com/getdr#key) or a getdr server; don't ask them to paste the key into the chat.
 
-Requirements: bash, curl and jq (only bash when the getdr binary is used).
+Requirements: bash, curl and jq 1.6 or newer (only bash when the getdr binary is used).
 
 <!-- See also: a sibling indexing skill by Index Pages (placeholder, not published yet). -->

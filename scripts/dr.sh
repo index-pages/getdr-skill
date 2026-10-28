@@ -24,7 +24,8 @@
 # Exit codes: 0 ok, 2 error or targets without a response, 3 Ahrefs API key
 # missing or rejected (nothing on stdout).
 #
-# Needs bash, curl and jq; with the getdr binary (backend 2) only bash.
+# Needs bash, curl and jq 1.6 or newer; with the getdr binary (backend 2)
+# only bash.
 # Network: only $GETDR_API and api.ahrefs.com. No telemetry.
 
 set -eu
@@ -140,7 +141,8 @@ fi
 # userinfo and port dropped, lower-case, one trailing dot and one leading
 # "www." removed. gotrim matches Go's strings.TrimSpace, golower Go's
 # strings.ToLower for ASCII, Latin-1, Latin Extended-A and Additional, Greek,
-# Cyrillic, Armenian and fullwidth Latin (other scripts are left as they are).
+# Cyrillic, Armenian and fullwidth Latin. Upper-case letters of other scripts
+# (e.g. Latin Extended-B, Georgian) are not lower-cased here, unlike in getdr.
 # shellcheck disable=SC2016 # jq code, not shell
 JQ_LIB='
 def gows: "[\t\n\u000b\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]";
@@ -224,6 +226,11 @@ def errtext:
 # --- targets ----------------------------------------------------------------
 
 need jq "https://jqlang.org/"
+jq_version=$(jq --version 2>/dev/null || true)
+case $jq_version in
+jq-1.[6-9]* | jq-1.[1-9][0-9]* | jq-[2-9]*) ;;
+*) die 2 "dr.sh needs jq 1.6 or newer, found ${jq_version:-an unknown version}; update jq (https://jqlang.org/), or install the getdr binary" ;;
+esac
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/getdr-skill.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' INT
@@ -420,9 +427,11 @@ while [ "$i" -lt "$batches" ]; do
 	key) die 3 "$reason" ;;
 	fail) noresponse "$reason" >>"$tmp/results" ;;
 	ok)
-		# Same matching as getdr: by target, then lower-cased, then by
-		# position when the counts match. An error, a null or a missing
-		# rating is "no data"; 0 is a value.
+		# Same matching as getdr: by target, then lower-cased; when the
+		# counts match, a target without a name match falls back to the
+		# item at its own position, unless that item was already matched
+		# by name. An error, a null or a missing rating is "no data"; 0 is
+		# a value.
 		jq -c --arg v "$version" --arg now "$now" --rawfile resp "$tmp/resp" "$JQ_LIB"'
 		  def opt($types): (type) as $t | any($types[]; . == $t);
 		  . as $batch
@@ -438,10 +447,13 @@ while [ "$i" -lt "$batches" ]; do
 		      ($items | map(. // {})) as $items
 		      | (reduce range($items | length) as $j ({};
 		          ($items[$j].target // "") as $t | .[$t] = $j | .[$t | golower] = $j)) as $by
+		      | [$batch[] as $t | $by[$t] // $by[$t | golower]] as $named
+		      | (reduce ($named[] | select(. != null)) as $j ({}; .[$j | tostring] = true)) as $used
 		      | range($batch | length) as $i
 		      | $batch[$i] as $t
-		      | ($by[$t] // $by[$t | golower]
-		         // (if ($items | length) == ($batch | length) then $i else null end)) as $j
+		      | ($named[$i]
+		         // (if ($items | length) == ($batch | length) and ($used[$i | tostring] | not)
+		             then $i else null end)) as $j
 		      | {target: $t,
 		         dr: (if $j != null and ($items[$j].error // "") == "" then $items[$j].domain_rating | num else null end),
 		         version: $v, checked_at: $now, cached: false}

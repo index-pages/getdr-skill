@@ -16,7 +16,7 @@ git clone https://github.com/index-pages/getdr-skill ~/.claude/skills/getdr
 
 Or per project, in `.claude/skills/getdr`. Other agents: put the folder where they look for skills.
 
-Requirements: bash, curl and jq. With the getdr binary on `PATH`, only bash.
+Requirements: bash (3.2 or newer), curl and jq 1.6 or newer. With the getdr binary on `PATH`, only bash.
 
 Optional: install the getdr binary for a local cache and DR history. `scripts/install.sh` downloads the
 release archive for your OS and CPU, verifies its SHA-256 against `checksums.txt` and copies the binary
@@ -38,6 +38,9 @@ Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdi
 
 Targets are normalized exactly like getdr does: a URL becomes its host, userinfo and port are dropped,
 `www.` is removed, everything is lower-cased and duplicates are removed, keeping the first occurrence.
+One limitation on the direct path: only ASCII, Latin-1, Latin Extended-A and Additional, Greek, Cyrillic,
+Armenian and fullwidth Latin letters are lower-cased; upper-case letters of other scripts (e.g. Latin
+Extended-B, Georgian) are sent as written, while getdr would lower-case them.
 
 ## Backends
 
