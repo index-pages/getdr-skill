@@ -6,10 +6,25 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- An invalid target's line has `"error":"invalid target"`, on every backend.
+  Through a getdr server, a target the server's Ahrefs refuses is now
+  reported as invalid instead of "no response".
+- A bare `-` argument reads targets from stdin in its place.
+
+### Changed
+
+- Without `--version`, the DR version is left to the getdr server or binary
+  config (`dr3` on the direct path); before, `dr3` was always sent.
+
 ### Removed
 
 - `scripts/dr.sh` no longer prints the Ahrefs attribution line on stderr or
   in `-h`, and `SKILL.md` no longer asks the agent to add it to answers.
+- The hint to install the getdr binary after direct-path results: stderr now
+  carries only errors.
+- An unused "See also" placeholder comment in `SKILL.md`.
 
 ## [0.1.0] - 2026-10-28
 

@@ -18,8 +18,9 @@
 # de-duplication, exactly like getdr --format json:
 #   {"target":"x.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
 # dr is null for an invalid target, no response or no data; checked_at is
-# null only for an invalid target or no response. stderr gets only error lines
-# ("getdr: invalid target: X" for each invalid one).
+# null only for an invalid target or no response; an invalid target also gets
+# "error":"invalid target". stderr gets only error lines ("getdr: invalid
+# target: X" for each invalid one).
 #
 # Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
 # 3 Ahrefs API key missing or rejected (nothing on stdout).
@@ -30,7 +31,7 @@
 
 set -eu
 
-VERSION=0.1.0
+VERSION=0.2.0
 USER_AGENT="getdr/$VERSION (+https://index-pages.com/getdr)"
 AHREFS_URL=https://api.ahrefs.com/v3/public/domain-rating-free
 KEY_HELP=https://index-pages.com/getdr#key
@@ -48,8 +49,9 @@ Usage:
   printf '%s\n' a.com b.com | dr.sh [flags]
 
 Flags:
-  -f, --file FILE    read targets from FILE ("-" for stdin)
-      --version V    DR version: dr3 (default) or dr4; values are not comparable
+  -f, --file FILE    read targets from FILE ("-" for stdin, like a bare -)
+      --version V    DR version dr3 or dr4, values are not comparable;
+                     default: the getdr server's or binary's config, else dr3
       --fresh        bypass caches (getdr binary or server) and refetch
       --raw          send targets as given, without normalization
   -h, --help         show this help
@@ -78,7 +80,8 @@ need() {
 
 orig=("$@")
 targets=()
-version=dr3
+version=
+dash=false
 fresh=false
 raw=false
 file=
@@ -110,14 +113,17 @@ while [ $# -gt 0 ]; do
 	--version=*) version=${1#--version=} ;;
 	--fresh) fresh=true ;;
 	--raw) raw=true ;;
-	-) die 2 "use -f - to read targets from stdin" ;;
+	-)
+		targets+=(-)
+		dash=true
+		;;
 	-?*) die 2 "unknown flag $1 (see dr.sh --help)" ;;
 	*) targets+=("$1") ;;
 	esac
 	shift
 done
 case $version in
-dr3 | dr4) ;;
+"" | dr3 | dr4) ;;
 *) die 2 "--version: \"$version\" is not dr3 or dr4" ;;
 esac
 
@@ -130,7 +136,7 @@ case $api in
 esac
 if [ -z "$api" ] && command -v getdr >/dev/null 2>&1; then
 	rc=0
-	out=$(getdr --format json -q --version "$version" ${orig[@]+"${orig[@]}"}) || rc=$?
+	out=$(getdr --format json -q ${orig[@]+"${orig[@]}"}) || rc=$?
 	if [ -n "$out" ]; then printf '%s\n' "$out"; fi
 	exit "$rc"
 fi
@@ -288,41 +294,45 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # Arguments are taken as they are; file and stdin lines are trimmed, and blank
-# and # lines skipped, like getdr does. Arguments go to jq NUL-separated, so a
-# target that looks like a jq flag stays a target.
+# and # lines skipped, like getdr does. A bare - argument is replaced by the
+# stdin lines, -f lines follow the arguments. Arguments go to jq NUL-separated,
+# so a target that looks like a jq flag stays a target.
 # shellcheck disable=SC2016
 prepare='
-  ($args | split("\u0000") | .[:-1]) as $a
-  | ($a + (split("\n") | map(gotrim | select(. != "" and (startswith("#") | not))))) as $in
+  def lines: split("\n") | map(gotrim | select(. != "" and (startswith("#") | not)));
+  (lines) as $stdin
+  | ($args | split("\u0000") | .[:-1]) as $a
+  | ($a | index("-")) as $d
+  | ((if $d == null then $a else $a[:$d] + $stdin + ($a[$d + 1:] | map(select(. != "-"))) end)
+     + (if $file_stdin then (if $d == null then $stdin else [] end) else ($ftext | lines) end)) as $in
   | {n: ($in | length),
      t: ($in | map(gotrim | select(. != "") | if $raw then . else (norm as $n | if $n == "" then . else $n end) end)
           | dedup)}
   | .v = (.t | map(select(valid)))
   | .bad = [.t[] | select(valid | not)]'
-read_stdin=false
+file_stdin=false
+ftext=/dev/null
 if $have_file; then
 	if [ "$file" = - ]; then
-		read_stdin=true
+		file_stdin=true
 	elif [ ! -f "$file" ] || [ ! -r "$file" ]; then
 		die 2 "open $file: no such readable file"
+	else
+		ftext=$file
 	fi
 elif [ ${#targets[@]} -eq 0 ]; then
 	if [ -t 0 ]; then
 		usage >&2
 		exit 2
 	fi
-	read_stdin=true
+	file_stdin=true
 fi
-if $read_stdin; then
-	src=/dev/stdin
-elif $have_file; then
-	src=$file
-else
-	src=/dev/null
-fi
+src=/dev/null
+if $dash || $file_stdin; then src=/dev/stdin; fi
 : >"$tmp/args"
 if [ ${#targets[@]} -gt 0 ]; then printf '%s\0' "${targets[@]}" >"$tmp/args"; fi
-jq -Rsc --argjson raw "$raw" --rawfile args "$tmp/args" "$JQ_LIB $prepare" <"$src" >"$tmp/prepared.json"
+jq -Rsc --argjson raw "$raw" --argjson file_stdin "$file_stdin" --rawfile args "$tmp/args" --rawfile ftext "$ftext" \
+	"$JQ_LIB $prepare" <"$src" >"$tmp/prepared.json"
 [ "$(jq .n "$tmp/prepared.json")" -gt 0 ] || die 2 "no targets"
 jq -c .t "$tmp/prepared.json" >"$tmp/targets.json"
 [ "$(jq length "$tmp/targets.json")" -gt 0 ] || die 2 "no valid targets"
@@ -357,10 +367,14 @@ noresponse() { # reason -> no-response records for all targets in $tmp/batch.jso
 }
 
 # Print the records in target order, report invalid targets and targets
-# without a response like getdr does, exit 0 or 2.
+# without a response like getdr does, exit 0 or 2. Records made before the DR
+# version was known (no --version, through a getdr server) get the version the
+# server answered with, or dr3.
 finish() {
-	jq -cs --slurpfile t "$tmp/targets.json" \
-		'(map({key: .target, value: .}) | from_entries) as $m | $t[0][] | $m[.]' \
+	jq -cs --slurpfile t "$tmp/targets.json" '
+	  ([.[].version | select(. != "")][0] // "dr3") as $dv
+	  | (map({key: .target, value: (if .version == "" then .version = $dv else . end)}) | from_entries) as $m
+	  | $t[0][] | $m[.]' \
 		"$tmp/results" >"$tmp/ordered"
 	jq -r 'select(.inv) | "getdr: invalid target: \(.target)"' "$tmp/ordered" >&2
 	jq -rs '
@@ -372,8 +386,7 @@ finish() {
 	  | "getdr: no response for \(.t | length) target(s): \(.r): "
 	    + (if (.t | length) > 10 then (.t[:10] | join(", ")) + " and \(.t | length - 10) more"
 	       else .t | join(", ") end)' "$tmp/ordered" >&2
-	jq -c '{target, dr, version, checked_at, cached}' "$tmp/ordered"
-	if [ -n "${1:-}" ]; then printf '%s\n' "$1" >&2; fi
+	jq -c '{target, dr, version, checked_at, cached} + (if .inv then {error: "invalid target"} else {} end)' "$tmp/ordered"
 	if jq -se 'any(.[]; .err or .inv)' "$tmp/ordered" >/dev/null; then exit 2; fi
 	exit 0
 }
@@ -393,7 +406,7 @@ if [ -n "$api" ]; then
 		if [ -n "${GETDR_SERVE_TOKEN:-}" ]; then printf 'Authorization: Bearer %s\n' "$GETDR_SERVE_TOKEN"; fi
 	} >"$tmp/headers"
 	jq -c --arg v "$version" --argjson fresh "$fresh" --argjson raw "$raw" \
-		'{targets: ., version: $v, fresh: $fresh, raw: $raw}' "$tmp/valid.json" >"$tmp/body"
+		'{targets: .} + (if $v == "" then {} else {version: $v} end) + {fresh: $fresh, raw: $raw}' "$tmp/valid.json" >"$tmp/body"
 	cp "$tmp/valid.json" "$tmp/batch.json"
 	batches=$(((count + BATCH - 1) / BATCH))
 	post "$api/dr" "$tmp/body" $((TIMEOUT * (RETRIES + 1) * batches + 30))
@@ -409,9 +422,11 @@ if [ -n "$api" ]; then
 		      (reduce ($r[0].results // [])[] as $x ({};
 		        if ($x | type) == "object" and ($x.target | type) == "string" then .[$x.target] = $x else . end)) as $m
 		      | .[] as $t | $m[$t] as $x
+		      | (if ($x.version | type) == "string" and $x.version != "" then $x.version else $v end) as $xv
 		      | if $x == null then $t | record($v) + {err: "missing from getdr server response"}
-		        elif $x.checked_at == null then $t | record($v) + {err: "\($s): no response from Ahrefs"}
-		        else {target: $t, dr: ($x.dr | num), version: $v, checked_at: $x.checked_at, cached: ($x.cached == true)}
+		        elif $x.error == "invalid target" then $t | record($xv) + {inv: true}
+		        elif $x.checked_at == null then $t | record($xv) + {err: "\($s): no response from Ahrefs"}
+		        else {target: $t, dr: ($x.dr | num), version: $xv, checked_at: $x.checked_at, cached: ($x.cached == true)}
 		        end
 		    end' "$tmp/valid.json" >>"$tmp/results"
 	elif [ "$code" = 503 ]; then
@@ -428,6 +443,7 @@ fi
 
 # --- backend 3: straight to Ahrefs ------------------------------------------
 
+version=${version:-dr3}
 printf 'Authorization: Bearer %s\nContent-Type: application/json\nAccept: application/json\n' "$key" >"$tmp/headers"
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -556,5 +572,4 @@ while [ "$i" -lt "$batches" ]; do
 	i=$((i + 1))
 done
 
-install_sh=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)/install.sh
-finish "getdr: for a local cache and history, install the getdr binary: $install_sh (https://index-pages.com/getdr)"
+finish

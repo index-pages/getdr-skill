@@ -33,8 +33,9 @@ printf '%s\n' a.com b.com | scripts/dr.sh
 scripts/dr.sh --version dr4 --fresh saas.com
 ```
 
-Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdin), `--version dr3|dr4`
-(default `dr3`), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
+Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdin; a bare `-` argument
+reads stdin in its place), `--version dr3|dr4` (default: what the getdr server or binary is configured
+with, `dr3` on the direct path), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
 
 Targets are normalized exactly like getdr does: a URL becomes its host, userinfo and port are dropped,
 `www.` is removed, everything is lower-cased, punycode labels (`xn--…`) are decoded to Unicode (so
@@ -46,10 +47,9 @@ Extended-B, Georgian) are sent as written, while getdr would lower-case them.
 
 Invalid targets don't spoil the rest of the list, as in getdr. Input with no host, whitespace or control
 characters is never sent; on the direct path, a target Ahrefs refuses (it fails the whole batch with HTTP
-400 naming the target, e.g. `localhost`) is dropped from the batch and the rest is resent. Each one gets
-`getdr: invalid target: X` on stderr, `dr` and `checked_at` `null`, and exit code 2. Through a getdr
-server, a target the server's Ahrefs refuses comes back as "no response", exactly as the getdr CLI
-reports it.
+400 naming the target, e.g. `localhost`) is dropped from the batch and the rest is resent; a getdr server
+does the same. Each one gets `getdr: invalid target: X` on stderr, `dr` and `checked_at` `null`,
+`"error":"invalid target"`, and exit code 2.
 
 ## Backends
 
@@ -61,8 +61,7 @@ reports it.
 2. `getdr` is on `PATH` – `getdr --format json -q`, with the binary's own config and cache.
 3. `GETDR_KEY` or `AHREFS_KEY` is set (`GETDR_KEY` wins) – `POST https://api.ahrefs.com/v3/public/domain-rating-free`
    in batches of up to 1000 targets, 1.5 s apart, with a 30 s timeout per request and up to 3 retries with
-   exponential backoff on 429, 5xx and network errors. After the results, one line on stderr suggests
-   installing the getdr binary.
+   exponential backoff on 429, 5xx and network errors.
 4. None of these – exit code 3 and a pointer to [getting a free key](https://index-pages.com/getdr#key).
 
 ## Output
@@ -79,8 +78,9 @@ the getdr MCP server:
 | `target` | normalized target (as given with `--raw`) |
 | `dr` | number, or `null` for an invalid target, no response or no data; Ahrefs answers `0` for unknown domains |
 | `version` | `dr3` or `dr4`; the two formulas give values that are not comparable |
-| `checked_at` | RFC 3339 UTC; `null` only when there was no response |
+| `checked_at` | RFC 3339 UTC; `null` only for an invalid target or no response |
 | `cached` | `true` when served from a getdr cache; always `false` on the direct path |
+| `error` | only on an invalid target: `"invalid target"`; no other line has it |
 
 Exit codes: `0` ok, `2` error, invalid targets or targets without a response (still printed, with `dr`
 and `checked_at` `null`), `3` Ahrefs API key missing or rejected (nothing on stdout).
@@ -98,7 +98,7 @@ getdr is not affiliated with Ahrefs.
 
 `scripts/dr.sh` connects to `GETDR_API` or `api.ahrefs.com` and nowhere else; `scripts/install.sh` only
 to the release download URL. No telemetry, no update checks, no analytics. Requests carry the User-Agent
-`getdr/0.1.0 (+https://index-pages.com/getdr)`. Keys and tokens are passed to curl in a temporary file
+`getdr/0.2.0 (+https://index-pages.com/getdr)`. Keys and tokens are passed to curl in a temporary file
 (mode 600), never on the command line. curl honours the standard `HTTP_PROXY`, `HTTPS_PROXY` and
 `NO_PROXY` environment variables; if you use a proxy and a getdr server on your LAN, add the server to
 `NO_PROXY`.

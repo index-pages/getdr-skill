@@ -18,8 +18,8 @@ scripts/dr.sh saas.com
 scripts/dr.sh https://www.example.com/page a.com b.com
 scripts/dr.sh -f domains.txt                  # one per line, blank and # lines skipped
 printf '%s\n' a.com b.com | scripts/dr.sh     # stdin, when there are no arguments
-scripts/dr.sh -f - < domains.txt              # stdin explicitly
-scripts/dr.sh --version dr4 saas.com          # DR version: dr3 (default) or dr4
+scripts/dr.sh -f - < domains.txt              # stdin explicitly (a bare - works too)
+scripts/dr.sh --version dr4 saas.com          # DR version dr3 or dr4; default: the getdr config, else dr3
 scripts/dr.sh --fresh saas.com                # bypass caches and refetch
 ```
 
@@ -28,8 +28,8 @@ lower-cased, punycode (`xn--…`) is decoded to Unicode and duplicates are remov
 targets exactly as given.
 
 A target that is not a domain or URL (no host, whitespace, or refused by Ahrefs, such as
-`localhost`) gets `dr` and `checked_at` `null`, a `getdr: invalid target: X` line on stderr and
-exit code 2; the other targets are still checked.
+`localhost`) gets `dr` and `checked_at` `null`, `"error":"invalid target"`, a
+`getdr: invalid target: X` line on stderr and exit code 2; the other targets are still checked.
 
 ## Output
 
@@ -42,7 +42,8 @@ de-duplication, and nothing else:
 
 - `dr`: number, or `null` when the target was invalid, got no response or Ahrefs has no data.
   Ahrefs answers `0` for domains it does not know, so `0` is a real value, not an error.
-- `checked_at`: RFC 3339 UTC time of the measurement; `null` only when there was no response.
+- `checked_at`: RFC 3339 UTC time of the measurement; `null` for an invalid target or no response.
+- `error`: only on an invalid target, always `"invalid target"`; no other line has it.
 - `cached`: `true` when the value came from a cache (a getdr binary or server).
 - `version`: `dr3` and `dr4` are different formulas. Never compare or mix their values; when
   comparing domains, use one version for all of them.
@@ -63,5 +64,3 @@ With none of them, the script exits with code 3. Tell the user they need a free 
 (https://index-pages.com/getdr#key) or a getdr server; don't ask them to paste the key into the chat.
 
 Requirements: bash, curl and jq 1.6 or newer (only bash when the getdr binary is used).
-
-<!-- See also: a sibling indexing skill by Index Pages (placeholder, not published yet). -->

@@ -2,7 +2,7 @@
 # install.sh – install the getdr binary from GitHub Releases.
 # Part of the getdr skill by Index Pages: https://index-pages.com/getdr
 #
-# Usage: install.sh [VERSION]          default VERSION: 0.1.0
+# Usage: install.sh [VERSION]          default VERSION: 0.2.0
 #        PREFIX=/usr/local install.sh  installs to $PREFIX/bin (default ~/.local/bin)
 #
 # Downloads getdr_<version>_<os>_<arch>.tar.gz and checksums.txt, verifies the
@@ -16,7 +16,7 @@ set -eu
 
 RELEASES_URL="https://github.com/index-pages/getdr/releases/download"
 
-version=${1:-0.1.0}
+version=${1:-0.2.0}
 version=${version#v}
 dest=${PREFIX:-$HOME/.local}/bin
 
