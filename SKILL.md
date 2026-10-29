@@ -47,11 +47,9 @@ de-duplication, and nothing else:
 - `version`: `dr3` and `dr4` are different formulas. Never compare or mix their values; when
   comparing domains, use one version for all of them.
 
-stderr carries errors and one attribution line. Exit codes: `0` ok (no-data targets included),
+stderr carries only errors. Exit codes: `0` ok (no-data targets included),
 `2` error, invalid targets or targets without a response (their lines are still printed), `3` Ahrefs API key
 missing or rejected (nothing on stdout; the message links to https://index-pages.com/getdr#key).
-
-When you show DR values to the user, credit the source: "Domain Rating by Ahrefs".
 
 ## Backends
 

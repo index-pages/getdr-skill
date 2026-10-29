@@ -191,16 +191,14 @@ contract() { # every stdout line is exactly the contract object
 		bad "$1: stdout is NDJSON in the contract shape" "$(head -n 5 "$tmp/$1.out")"
 	fi
 }
-attribution_once() {
-	local n
-	n=$(grep -c '^Domain Rating by Ahrefs – https://ahrefs.com/$' "$tmp/$1.err" || true)
-	if [ "$n" = 1 ] && ! grep -q 'Ahrefs' "$tmp/$1.out"; then
-		ok "$1: attribution once on stderr, never on stdout"
+no_attribution() {
+	if ! grep -q 'Ahrefs' "$tmp/$1.out" "$tmp/$1.err"; then
+		ok "$1: no attribution on stdout or stderr"
 	else
-		bad "$1: attribution once on stderr, never on stdout" "stderr count $n"
+		bad "$1: no attribution on stdout or stderr" "$(grep -h 'Ahrefs' "$tmp/$1.out" "$tmp/$1.err" | head -n 3)"
 	fi
 }
-errlines() { grep -v -e '^Domain Rating by Ahrefs – ' -e 'install the getdr binary' "$tmp/$1.err" || true; }
+errlines() { grep -v -e 'install the getdr binary' "$tmp/$1.err" || true; }
 hint_count() { grep -c 'install the getdr binary' "$tmp/$1.err" || true; }
 
 # --- inputs -----------------------------------------------------------------
@@ -239,7 +237,7 @@ for v in dr3 dr4; do
 	for m in api bin direct; do
 		check "$m-$v: exit 0" rc_is "$m-$v" 0
 		contract "$m-$v"
-		attribution_once "$m-$v"
+		no_attribution "$m-$v"
 	done
 	same "api-$v" "bin-$v"
 	same "api-$v" "direct-$v"
@@ -298,7 +296,6 @@ echo "== stderr"
 check "install hint only for the direct backend, once" bash -c "
 	[ \"\$(grep -c 'install the getdr binary' '$tmp/direct-dr3.err')\" = 1 ] &&
 	! grep -q 'install the getdr binary' '$tmp/api-dr3.err' '$tmp/bin-dr3.err'"
-check "install hint after the attribution" bash -c "tail -n 1 '$tmp/direct-dr3.err' | grep -q 'install the getdr binary'"
 
 # --- 2. errors and exit codes -----------------------------------------------
 

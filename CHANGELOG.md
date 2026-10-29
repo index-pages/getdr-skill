@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- `scripts/dr.sh` no longer prints the Ahrefs attribution line on stderr or
+  in `-h`, and `SKILL.md` no longer asks the agent to add it to answers.
+
 ## [0.1.0] - 2026-10-28
 
 ### Added

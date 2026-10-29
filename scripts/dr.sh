@@ -18,9 +18,8 @@
 # de-duplication, exactly like getdr --format json:
 #   {"target":"x.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
 # dr is null for an invalid target, no response or no data; checked_at is
-# null only for an invalid target or no response. stderr gets error lines
-# ("getdr: invalid target: X" for each invalid one) and, once, the
-# attribution "Domain Rating by Ahrefs – https://ahrefs.com/".
+# null only for an invalid target or no response. stderr gets only error lines
+# ("getdr: invalid target: X" for each invalid one).
 #
 # Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
 # 3 Ahrefs API key missing or rejected (nothing on stdout).
@@ -34,7 +33,6 @@ set -eu
 VERSION=0.1.0
 USER_AGENT="getdr/$VERSION (+https://index-pages.com/getdr)"
 AHREFS_URL=https://api.ahrefs.com/v3/public/domain-rating-free
-ATTRIBUTION="Domain Rating by Ahrefs – https://ahrefs.com/"
 KEY_HELP=https://index-pages.com/getdr#key
 BATCH=1000
 TIMEOUT=30
@@ -60,7 +58,6 @@ Backends: GETDR_API (getdr server), getdr on PATH, GETDR_KEY / AHREFS_KEY.
 Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
 3 key missing or rejected.
 
-Domain Rating by Ahrefs – https://ahrefs.com/
 Docs: https://index-pages.com/getdr
 EOF
 }
@@ -134,10 +131,7 @@ esac
 if [ -z "$api" ] && command -v getdr >/dev/null 2>&1; then
 	rc=0
 	out=$(getdr --format json -q --version "$version" ${orig[@]+"${orig[@]}"}) || rc=$?
-	if [ -n "$out" ]; then
-		printf '%s\n' "$out"
-		printf '%s\n' "$ATTRIBUTION" >&2
-	fi
+	if [ -n "$out" ]; then printf '%s\n' "$out"; fi
 	exit "$rc"
 fi
 
@@ -379,7 +373,6 @@ finish() {
 	    + (if (.t | length) > 10 then (.t[:10] | join(", ")) + " and \(.t | length - 10) more"
 	       else .t | join(", ") end)' "$tmp/ordered" >&2
 	jq -c '{target, dr, version, checked_at, cached}' "$tmp/ordered"
-	printf '%s\n' "$ATTRIBUTION" >&2
 	if [ -n "${1:-}" ]; then printf '%s\n' "$1" >&2; fi
 	if jq -se 'any(.[]; .err or .inv)' "$tmp/ordered" >/dev/null; then exit 2; fi
 	exit 0

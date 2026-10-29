@@ -89,8 +89,8 @@ and `checked_at` `null`), `3` Ahrefs API key missing or rejected (nothing on std
 
 Domain Rating data comes from [Ahrefs](https://ahrefs.com/) and is subject to the
 [Domain Rating License](https://ahrefs.com/legal/domain-rating-license), which requires the attribution
-"Domain Rating by Ahrefs". `scripts/dr.sh` prints `Domain Rating by Ahrefs – https://ahrefs.com/` once
-per run on stderr, never on stdout. Keep it when you publish the numbers.
+"Domain Rating by Ahrefs" wherever you publish the numbers. `scripts/dr.sh` itself prints only the data,
+with no attribution in its output.
 
 getdr is not affiliated with Ahrefs.
 
