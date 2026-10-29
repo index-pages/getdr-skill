@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 
 - An invalid target's line has `"error":"invalid target"`, on every backend.
@@ -48,5 +50,6 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/run.sh`: end-to-end tests of all backends against the getdr mock
   server.
 
-[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/index-pages/getdr-skill/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/index-pages/getdr-skill/releases/tag/v0.1.0
