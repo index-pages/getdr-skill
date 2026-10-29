@@ -261,15 +261,17 @@ for m in api bin direct; do
 	printf 'a.example\nhttps://b.example/\n# skip\n' | run "$m" "$m-stdin"
 	printf 'b.example\n' | run "$m" "$m-dash" a.example -f -
 	printf 'b.example\nc.example\n' | run "$m" "$m-bare" a.example - d.example
+	printf 'b.example\n' | run "$m" "$m-sepdash" -- - a.example
 	run "$m" "$m-crlf" -f "$tmp/crlf.txt"
 	run "$m" "$m-raw" --raw " HTTPS://WWW.Raw.example/P " raw.example
 	run "$m" "$m-fresh" --fresh a.example --version=dr4
 	run "$m" "$m-sep" -- a.example
 done
-for c in args stdin dash bare crlf raw fresh sep; do
+for c in args stdin dash bare sepdash crlf raw fresh sep; do
 	same "api-$c" "bin-$c"
 	same "api-$c" "direct-$c"
 done
+check "-- - reads stdin too" jq -e -s '[.[].target] == ["b.example", "a.example"]' "$tmp/direct-sepdash.out"
 check "a bare - reads stdin in its place" jq -e -s '[.[].target] == ["a.example", "b.example", "c.example", "d.example"]' "$tmp/direct-bare.out"
 check "--raw keeps the target as given (trimmed)" jq -e -s '.[0].target == "HTTPS://WWW.Raw.example/P"' "$tmp/direct-raw.out"
 

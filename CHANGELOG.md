@@ -15,6 +15,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The binary backend needs getdr 0.2.0 or newer (`scripts/install.sh`
+  installs it).
 - Without `--version`, the DR version is left to the getdr server or binary
   config (`dr3` on the direct path); before, `dr3` was always sent.
 

@@ -57,7 +57,7 @@ missing or rejected (nothing on stdout; the message links to https://index-pages
 The script picks the first that applies; the output is the same either way:
 
 1. `GETDR_API` – a getdr server (`getdr serve`); `GETDR_SERVE_TOKEN` is sent as the bearer token.
-2. `getdr` on `PATH` – the getdr binary, with its own config and cache.
+2. `getdr` on `PATH` – the getdr binary (0.2.0 or newer), with its own config and cache.
 3. `GETDR_KEY` or `AHREFS_KEY` – straight to the free Ahrefs endpoint.
 
 With none of them, the script exits with code 3. Tell the user they need a free Ahrefs API key

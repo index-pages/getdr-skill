@@ -16,7 +16,8 @@ git clone https://github.com/index-pages/getdr-skill ~/.claude/skills/getdr
 
 Or per project, in `.claude/skills/getdr`. Other agents: put the folder where they look for skills.
 
-Requirements: bash (3.2 or newer), curl and jq 1.6 or newer. With the getdr binary on `PATH`, only bash.
+Requirements: bash (3.2 or newer), curl and jq 1.6 or newer. With the getdr binary on `PATH` (0.2.0 or
+newer; `scripts/install.sh` installs it), only bash.
 
 Optional: install the getdr binary for a local cache and DR history. `scripts/install.sh` downloads the
 release archive for your OS and CPU, verifies its SHA-256 against `checksums.txt` and copies the binary
@@ -34,8 +35,9 @@ scripts/dr.sh --version dr4 --fresh saas.com
 ```
 
 Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdin; a bare `-` argument
-reads stdin in its place), `--version dr3|dr4` (default: what the getdr server or binary is configured
-with, `dr3` on the direct path), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
+reads stdin in its place), `--version dr3|dr4` (default: the config of the backend in use – the getdr
+server with `GETDR_API`, otherwise the binary's own config, also when it uses a server – and `dr3` on the
+direct path), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
 
 Targets are normalized exactly like getdr does: a URL becomes its host, userinfo and port are dropped,
 `www.` is removed, everything is lower-cased, punycode labels (`xn--…`) are decoded to Unicode (so

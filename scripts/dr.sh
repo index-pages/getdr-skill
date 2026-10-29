@@ -90,7 +90,10 @@ while [ $# -gt 0 ]; do
 	case $1 in
 	--)
 		shift
-		for a in "$@"; do targets+=("$a"); done
+		for a in "$@"; do
+			targets+=("$a")
+			if [ "$a" = - ]; then dash=true; fi
+		done
 		break
 		;;
 	-h | --help)
