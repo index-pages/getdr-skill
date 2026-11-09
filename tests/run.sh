@@ -307,7 +307,7 @@ run api api-big -f "$tmp/big.txt"
 same api-big direct-big
 check "direct: 3 POST requests for 2500 targets" bash -c "[ \$(grep -c '^URL ' '$tmp/curl.log') = 3 ]"
 check "direct: only api.ahrefs.com contacted" bash -c "! grep '^URL ' '$tmp/curl.log' | grep -v '^URL http://127.0.0.1:$p_ahrefs/v3/public/domain-rating-free?output=json$'"
-check "direct: User-Agent getdr/0.2.0" bash -c "! grep '^UA ' '$tmp/curl.log' | grep -v '^UA getdr/0.2.0 (+https://index-pages.com/getdr)$'"
+check "direct: User-Agent getdr/0.2.1" bash -c "! grep '^UA ' '$tmp/curl.log' | grep -v '^UA getdr/0.2.1 (+https://index-pages.com/getdr/)$'"
 
 echo "== DR version from the server or config when not given"
 : >"$tmp/curl.log"
@@ -328,7 +328,7 @@ check "api: --version dr3 still wins over the server" bash -c "GETDR_API='$API4'
 echo "== exit codes"
 run none none a.example
 check "no backend: exit 3" rc_is none 3
-check "no backend: link to the key page" grep -q 'https://index-pages.com/getdr#key' "$tmp/none.err"
+check "no backend: link to the key page" grep -q 'https://index-pages.com/getdr/#key' "$tmp/none.err"
 check "no backend: nothing on stdout" test ! -s "$tmp/none.out"
 
 # Response matching, as in getdr: each item is used at most once, names
@@ -349,7 +349,7 @@ check "matching: no position fallback when the counts differ" bash -c "[ \"\$(ca
 
 KEY=bad run direct direct-badkey a.example
 check "rejected key: exit 3, nothing on stdout" bash -c "[ \$(cat '$tmp/direct-badkey.rc') = 3 ] && [ ! -s '$tmp/direct-badkey.out' ]"
-check "rejected key: message" grep -q 'Ahrefs API key rejected by Ahrefs (HTTP 401: Unauthorized); see https://index-pages.com/getdr#key' "$tmp/direct-badkey.err"
+check "rejected key: message" grep -q 'Ahrefs API key rejected by Ahrefs (HTTP 401: Unauthorized); see https://index-pages.com/getdr/#key' "$tmp/direct-badkey.err"
 check "rejected key: only the error on stderr" test "$(wc -l <"$tmp/direct-badkey.err" | tr -d ' ')" = 1
 
 # Unreachable getdr server: every target without a response, exit 2, the
@@ -423,7 +423,7 @@ echo "== install.sh"
 case $(uname -s) in Linux) os=linux ;; Darwin) os=darwin ;; *) os=unknown ;; esac
 case $(uname -m) in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) arch=unknown ;; esac
 mkdir -p "$tmp/release" "$tmp/ishim"
-archive=getdr_0.2.0_${os}_${arch}.tar.gz
+archive=getdr_0.2.1_${os}_${arch}.tar.gz
 tar -czf "$tmp/release/$archive" -C "$tmp/bin" getdr
 (cd "$tmp/release" && { sha256sum "$archive" 2>/dev/null || shasum -a 256 "$archive"; } >checksums.txt)
 cat >"$tmp/ishim/curl" <<EOF
@@ -434,14 +434,14 @@ while [ \$# -gt 0 ]; do
 	shift
 done
 printf '%s\n' "\$url" >>"$tmp/install.log"
-case \$url in https://github.com/index-pages/getdr/releases/download/v0.2.0/*) ;; *) exit 22 ;; esac
+case \$url in https://github.com/index-pages/getdr/releases/download/v0.2.1/*) ;; *) exit 22 ;; esac
 cp "$tmp/release/\${url##*/}" "\$out" 2>/dev/null || exit 22
 EOF
 chmod +x "$tmp/ishim/curl"
 irun() { PATH="$tmp/ishim:$clean_path" PREFIX="$tmp/prefix" "$here/scripts/install.sh" "$@" >"$tmp/install.out" 2>&1; }
 check "install.sh: installs the binary" irun
 check "install.sh: binary in \$PREFIX/bin, executable, identical" bash -c "[ -x '$tmp/prefix/bin/getdr' ] && cmp -s '$tmp/prefix/bin/getdr' '$tmp/bin/getdr'"
-check "install.sh: only the release URLs fetched" bash -c "[ \$(grep -vc '^https://github.com/index-pages/getdr/releases/download/v0.2.0/' '$tmp/install.log') = 0 ]"
+check "install.sh: only the release URLs fetched" bash -c "[ \$(grep -vc '^https://github.com/index-pages/getdr/releases/download/v0.2.1/' '$tmp/install.log') = 0 ]"
 rm -f "$tmp/prefix/bin/getdr"
 echo "0000000000000000000000000000000000000000000000000000000000000000  $archive" >"$tmp/release/checksums.txt"
 check "install.sh: refuses a checksum mismatch" bash -c "! PATH='$tmp/ishim:$clean_path' PREFIX='$tmp/prefix' '$here/scripts/install.sh' >/dev/null 2>&1"

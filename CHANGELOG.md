@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-30
+
+### Changed
+
+- Links to the site use the canonical `https://index-pages.com/getdr/` (with
+  the trailing slash) in messages, `-h`, the User-Agent and the docs.
+- `scripts/install.sh` installs getdr 0.2.1 by default.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
@@ -50,6 +58,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/run.sh`: end-to-end tests of all backends against the getdr mock
   server.
 
-[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/index-pages/getdr-skill/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/index-pages/getdr-skill/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/index-pages/getdr-skill/releases/tag/v0.1.0

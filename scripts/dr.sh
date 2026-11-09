@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dr.sh – Ahrefs Domain Rating (DR) for domains or URLs, one JSON object per
 # target on stdout. Part of the getdr skill by Index Pages:
-# https://index-pages.com/getdr
+# https://index-pages.com/getdr/
 #
 # Usage: dr.sh [--version dr3|dr4] [--fresh] [--raw] [-f FILE] [TARGET...]
 #        printf '%s\n' a.com b.com | dr.sh
@@ -12,7 +12,7 @@
 #   2. getdr is on PATH: getdr --format json -q.
 #   3. GETDR_KEY or AHREFS_KEY is set (GETDR_KEY wins): POST to
 #      https://api.ahrefs.com/v3/public/domain-rating-free in batches of 1000.
-#   4. None of these: exit 3 with a link to https://index-pages.com/getdr#key.
+#   4. None of these: exit 3 with a link to https://index-pages.com/getdr/#key.
 #
 # Output (every backend): NDJSON, in input order after normalization and
 # de-duplication, exactly like getdr --format json:
@@ -31,10 +31,10 @@
 
 set -eu
 
-VERSION=0.2.0
-USER_AGENT="getdr/$VERSION (+https://index-pages.com/getdr)"
+VERSION=0.2.1
+USER_AGENT="getdr/$VERSION (+https://index-pages.com/getdr/)"
 AHREFS_URL=https://api.ahrefs.com/v3/public/domain-rating-free
-KEY_HELP=https://index-pages.com/getdr#key
+KEY_HELP=https://index-pages.com/getdr/#key
 BATCH=1000
 TIMEOUT=30
 RETRIES=3
@@ -60,7 +60,7 @@ Backends: GETDR_API (getdr server), getdr on PATH, GETDR_KEY / AHREFS_KEY.
 Exit codes: 0 ok, 2 error, invalid targets or targets without a response,
 3 key missing or rejected.
 
-Docs: https://index-pages.com/getdr
+Docs: https://index-pages.com/getdr/
 EOF
 }
 

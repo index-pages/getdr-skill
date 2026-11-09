@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # install.sh – install the getdr binary from GitHub Releases.
-# Part of the getdr skill by Index Pages: https://index-pages.com/getdr
+# Part of the getdr skill by Index Pages: https://index-pages.com/getdr/
 #
-# Usage: install.sh [VERSION]          default VERSION: 0.2.0
+# Usage: install.sh [VERSION]          default VERSION: 0.2.1
 #        PREFIX=/usr/local install.sh  installs to $PREFIX/bin (default ~/.local/bin)
 #
 # Downloads getdr_<version>_<os>_<arch>.tar.gz and checksums.txt, verifies the
@@ -16,7 +16,7 @@ set -eu
 
 RELEASES_URL="https://github.com/index-pages/getdr/releases/download"
 
-version=${1:-0.2.0}
+version=${1:-0.2.1}
 version=${version#v}
 dest=${PREFIX:-$HOME/.local}/bin
 
@@ -32,12 +32,12 @@ esac
 case $(uname -s) in
 Linux) os=linux ;;
 Darwin) os=darwin ;;
-*) die "unsupported OS $(uname -s); download getdr from https://index-pages.com/getdr" ;;
+*) die "unsupported OS $(uname -s); download getdr from https://index-pages.com/getdr/" ;;
 esac
 case $(uname -m) in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
-*) die "unsupported CPU $(uname -m); download getdr from https://index-pages.com/getdr" ;;
+*) die "unsupported CPU $(uname -m); download getdr from https://index-pages.com/getdr/" ;;
 esac
 
 command -v curl >/dev/null 2>&1 || die "needs curl"

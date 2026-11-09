@@ -1,7 +1,7 @@
 # getdr-skill
 
 `getdr-skill` is an agent skill by [Index Pages](https://index-pages.com) that answers one question:
-what is the Ahrefs Domain Rating (DR) of these domains. It wraps [getdr](https://index-pages.com/getdr)
+what is the Ahrefs Domain Rating (DR) of these domains. It wraps [getdr](https://index-pages.com/getdr/)
 and works without it too: with a getdr server, with the getdr binary, or straight against the official
 free Ahrefs endpoint with your own key. The output is the same NDJSON in every case.
 
@@ -22,7 +22,8 @@ newer; `scripts/install.sh` installs it), only bash.
 Optional: install the getdr binary for a local cache and DR history. `scripts/install.sh` downloads the
 release archive for your OS and CPU, verifies its SHA-256 against `checksums.txt` and copies the binary
 to `~/.local/bin` (or `$PREFIX/bin`); it runs nothing it downloads. Other ways to install:
-[index-pages.com/getdr](https://index-pages.com/getdr).
+`brew install index-pages/tap/getdr`, `npm install -g getdr`, `pipx install getdr`; more at
+[index-pages.com/getdr/](https://index-pages.com/getdr/).
 
 ## Use
 
@@ -57,14 +58,14 @@ does the same. Each one gets `getdr: invalid target: X` on stderr, `dr` and `che
 
 `scripts/dr.sh` uses the first one that applies:
 
-1. `GETDR_API` is set – one `POST $GETDR_API/dr` to a [getdr server](https://index-pages.com/getdr#api).
+1. `GETDR_API` is set – one `POST $GETDR_API/dr` to a [getdr server](https://index-pages.com/getdr/#api).
    `GETDR_SERVE_TOKEN`, when set, is sent as `Authorization: Bearer …` (the same variable the getdr CLI
    uses).
 2. `getdr` is on `PATH` – `getdr --format json -q`, with the binary's own config and cache.
 3. `GETDR_KEY` or `AHREFS_KEY` is set (`GETDR_KEY` wins) – `POST https://api.ahrefs.com/v3/public/domain-rating-free`
    in batches of up to 1000 targets, 1.5 s apart, with a 30 s timeout per request and up to 3 retries with
    exponential backoff on 429, 5xx and network errors.
-4. None of these – exit code 3 and a pointer to [getting a free key](https://index-pages.com/getdr#key).
+4. None of these – exit code 3 and a pointer to [getting a free key](https://index-pages.com/getdr/#key).
 
 ## Output
 
@@ -100,7 +101,7 @@ getdr is not affiliated with Ahrefs.
 
 `scripts/dr.sh` connects to `GETDR_API` or `api.ahrefs.com` and nowhere else; `scripts/install.sh` only
 to the release download URL. No telemetry, no update checks, no analytics. Requests carry the User-Agent
-`getdr/0.2.0 (+https://index-pages.com/getdr)`. Keys and tokens are passed to curl in a temporary file
+`getdr/0.2.1 (+https://index-pages.com/getdr/)`. Keys and tokens are passed to curl in a temporary file
 (mode 600), never on the command line. curl honours the standard `HTTP_PROXY`, `HTTPS_PROXY` and
 `NO_PROXY` environment variables; if you use a proxy and a getdr server on your LAN, add the server to
 `NO_PROXY`.

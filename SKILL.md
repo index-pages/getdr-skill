@@ -50,7 +50,7 @@ de-duplication, and nothing else:
 
 stderr carries only errors. Exit codes: `0` ok (no-data targets included),
 `2` error, invalid targets or targets without a response (their lines are still printed), `3` Ahrefs API key
-missing or rejected (nothing on stdout; the message links to https://index-pages.com/getdr#key).
+missing or rejected (nothing on stdout; the message links to https://index-pages.com/getdr/#key).
 
 ## Backends
 
@@ -61,6 +61,6 @@ The script picks the first that applies; the output is the same either way:
 3. `GETDR_KEY` or `AHREFS_KEY` – straight to the free Ahrefs endpoint.
 
 With none of them, the script exits with code 3. Tell the user they need a free Ahrefs API key
-(https://index-pages.com/getdr#key) or a getdr server; don't ask them to paste the key into the chat.
+(https://index-pages.com/getdr/#key) or a getdr server; don't ask them to paste the key into the chat.
 
 Requirements: bash, curl and jq 1.6 or newer (only bash when the getdr binary is used).
