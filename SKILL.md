@@ -14,13 +14,13 @@ Use `scripts/dr.sh` in this skill's directory. Pass targets as arguments or with
 script never waits on stdin:
 
 ```sh
-scripts/dr.sh saas.com
+scripts/dr.sh index-pages.com
 scripts/dr.sh https://www.example.com/page a.com b.com
 scripts/dr.sh -f domains.txt                  # one per line, blank and # lines skipped
 printf '%s\n' a.com b.com | scripts/dr.sh     # stdin, when there are no arguments
 scripts/dr.sh -f - < domains.txt              # stdin explicitly (a bare - works too)
-scripts/dr.sh --version dr4 saas.com          # DR version dr3 or dr4; default: the getdr config, else dr3
-scripts/dr.sh --fresh saas.com                # bypass caches and refetch
+scripts/dr.sh --version dr3 index-pages.com   # DR version dr4 or dr3; default: the getdr config, else dr4
+scripts/dr.sh --fresh index-pages.com         # bypass caches and refetch
 ```
 
 Domains and URLs both work: a URL is reduced to its host, `www.` is dropped, everything is
@@ -37,7 +37,7 @@ stdout has one JSON object per target (NDJSON), in input order after normalizati
 de-duplication, and nothing else:
 
 ```json
-{"target":"saas.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
+{"target":"index-pages.com","dr":69,"version":"dr4","checked_at":"2026-11-19T12:00:00Z","cached":false}
 ```
 
 - `dr`: number, or `null` when the target was invalid, got no response or Ahrefs has no data.
@@ -45,7 +45,7 @@ de-duplication, and nothing else:
 - `checked_at`: RFC 3339 UTC time of the measurement; `null` for an invalid target or no response.
 - `error`: only on an invalid target, always `"invalid target"`; no other line has it.
 - `cached`: `true` when the value came from a cache (a getdr binary or server).
-- `version`: `dr3` and `dr4` are different formulas. Never compare or mix their values; when
+- `version`: `dr4` (the default) and `dr3` are different formulas. Never compare or mix their values; when
   comparing domains, use one version for all of them.
 
 stderr carries only errors. Exit codes: `0` ok (no-data targets included),

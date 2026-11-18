@@ -6,6 +6,18 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
+### Changed
+
+- The default DR version is `dr4`, the new Ahrefs formula; before it was
+  `dr3`. On the direct path (`GETDR_KEY` / `AHREFS_KEY`) `scripts/dr.sh`
+  now asks for `dr4`; with a getdr server or binary the default is still
+  theirs, which is `dr4` from getdr 0.3.0 on and `dr3` before. Pass
+  `--version dr3` for the old formula.
+- `scripts/install.sh` installs getdr 0.3.0 by default.
+- Docs and examples use `dr4`.
+
 ## [0.2.1] - 2026-10-30
 
 ### Changed
@@ -58,7 +70,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/run.sh`: end-to-end tests of all backends against the getdr mock
   server.
 
-[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/index-pages/getdr-skill/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/index-pages/getdr-skill/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/index-pages/getdr-skill/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/index-pages/getdr-skill/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/index-pages/getdr-skill/releases/tag/v0.1.0

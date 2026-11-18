@@ -3,7 +3,7 @@
 # target on stdout. Part of the getdr skill by Index Pages:
 # https://index-pages.com/getdr/
 #
-# Usage: dr.sh [--version dr3|dr4] [--fresh] [--raw] [-f FILE] [TARGET...]
+# Usage: dr.sh [--version dr4|dr3] [--fresh] [--raw] [-f FILE] [TARGET...]
 #        printf '%s\n' a.com b.com | dr.sh
 #
 # Backends, the first one that applies is used:
@@ -16,7 +16,7 @@
 #
 # Output (every backend): NDJSON, in input order after normalization and
 # de-duplication, exactly like getdr --format json:
-#   {"target":"x.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
+#   {"target":"index-pages.com","dr":69,"version":"dr4","checked_at":"2026-11-19T12:00:00Z","cached":false}
 # dr is null for an invalid target, no response or no data; checked_at is
 # null only for an invalid target or no response; an invalid target also gets
 # "error":"invalid target". stderr gets only error lines ("getdr: invalid
@@ -31,7 +31,7 @@
 
 set -eu
 
-VERSION=0.2.1
+VERSION=0.3.0
 USER_AGENT="getdr/$VERSION (+https://index-pages.com/getdr/)"
 AHREFS_URL=https://api.ahrefs.com/v3/public/domain-rating-free
 KEY_HELP=https://index-pages.com/getdr/#key
@@ -50,8 +50,8 @@ Usage:
 
 Flags:
   -f, --file FILE    read targets from FILE ("-" for stdin, like a bare -)
-      --version V    DR version dr3 or dr4, values are not comparable;
-                     default: the getdr server's or binary's config, else dr3
+      --version V    DR version dr4 or dr3, values are not comparable;
+                     default: the getdr server's or binary's config, else dr4
       --fresh        bypass caches (getdr binary or server) and refetch
       --raw          send targets as given, without normalization
   -h, --help         show this help
@@ -372,10 +372,10 @@ noresponse() { # reason -> no-response records for all targets in $tmp/batch.jso
 # Print the records in target order, report invalid targets and targets
 # without a response like getdr does, exit 0 or 2. Records made before the DR
 # version was known (no --version, through a getdr server) get the version the
-# server answered with, or dr3.
+# server answered with, or dr4.
 finish() {
 	jq -cs --slurpfile t "$tmp/targets.json" '
-	  ([.[].version | select(. != "")][0] // "dr3") as $dv
+	  ([.[].version | select(. != "")][0] // "dr4") as $dv
 	  | (map({key: .target, value: (if .version == "" then .version = $dv else . end)}) | from_entries) as $m
 	  | $t[0][] | $m[.]' \
 		"$tmp/results" >"$tmp/ordered"
@@ -446,7 +446,7 @@ fi
 
 # --- backend 3: straight to Ahrefs ------------------------------------------
 
-version=${version:-dr3}
+version=${version:-dr4}
 printf 'Authorization: Bearer %s\nContent-Type: application/json\nAccept: application/json\n' "$key" >"$tmp/headers"
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

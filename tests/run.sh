@@ -95,16 +95,16 @@ p_api=$(free_port)
 p_ahrefs=$(free_port)
 p_lock=$(free_port)
 p_dead=$(free_port)
-p_api4=$(free_port)
+p_api3=$(free_port)
 API=http://127.0.0.1:$p_api
-API4=http://127.0.0.1:$p_api4
+API3=http://127.0.0.1:$p_api3
 LOCKED=http://127.0.0.1:$p_lock
 DEAD=http://127.0.0.1:$p_dead
 start_mock main -listen "127.0.0.1:$p_api" -ahrefs "127.0.0.1:$p_ahrefs"
 start_mock locked -listen "127.0.0.1:$p_lock" -token s3cret -no-key
-start_mock dr4 -listen "127.0.0.1:$p_api4" -version dr4
+start_mock dr3 -listen "127.0.0.1:$p_api3" -version dr3
 wait_up "$API"
-wait_up "$API4"
+wait_up "$API3"
 wait_up "$LOCKED"
 
 # curl shim for the direct backend: rewrite api.ahrefs.com to $AHREFS_TARGET
@@ -190,7 +190,7 @@ contract() { # every stdout line is exactly the contract object
 		 or (keys_unsorted == ["target", "dr", "version", "checked_at", "cached", "error"]
 		     and .error == "invalid target" and .dr == null and .checked_at == null))
 		and (.target | type) == "string" and (.dr | type == "number" or . == null)
-		and (.version == "dr3" or .version == "dr4")
+		and (.version == "dr4" or .version == "dr3")
 		and (.checked_at == null or (.checked_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")))
 		and (.cached | type) == "boolean")' "$tmp/$1.out" >/dev/null 2>&1; then
 		ok "$1: stdout is NDJSON in the contract shape"
@@ -212,8 +212,8 @@ errlines() { cat "$tmp/$1.err"; }
 cat >"$tmp/list.txt" <<'EOF'
 # a comment, then a blank line
 
-https://WWW.Saas.com/pricing?x=1#top
-saas.com
+https://WWW.Shop.example/pricing?x=1#top
+shop.example
 ahrefs.com
 index-pages.com
 nodata.example
@@ -236,7 +236,7 @@ seq -f 'site%g.example' 1 2500 >"$tmp/big.txt"
 # --- 1. same JSON from all three backends -----------------------------------
 
 echo "== same output from all backends"
-for v in dr3 dr4; do
+for v in dr4 dr3; do
 	run api "api-$v" --version "$v" -f "$tmp/list.txt"
 	run bin "bin-$v" --version "$v" -f "$tmp/list.txt"
 	run direct "direct-$v" --version "$v" -f "$tmp/list.txt"
@@ -249,9 +249,9 @@ for v in dr3 dr4; do
 	same "api-$v" "bin-$v"
 	same "api-$v" "direct-$v"
 done
-check "dr3 and dr4 differ" bash -c "! diff -q <(sed 's/dr4/dr3/' '$tmp/api-dr4.out') '$tmp/api-dr3.out' >/dev/null"
-check "direct: checked_at set, cached false" jq -e -s 'all(.[]; .checked_at != null and .cached == false)' "$tmp/direct-dr3.out"
-check "nodata.example: dr null, checked_at set" jq -e -s 'any(.[]; .target == "nodata.example" and .dr == null and .checked_at != null)' "$tmp/direct-dr3.out"
+check "dr4 and dr3 differ" bash -c "! diff -q <(sed 's/dr3/dr4/' '$tmp/api-dr3.out') '$tmp/api-dr4.out' >/dev/null"
+check "direct: checked_at set, cached false" jq -e -s 'all(.[]; .checked_at != null and .cached == false)' "$tmp/direct-dr4.out"
+check "nodata.example: dr null, checked_at set" jq -e -s 'any(.[]; .target == "nodata.example" and .dr == null and .checked_at != null)' "$tmp/direct-dr4.out"
 check "api: second call is served from the server cache" bash -c "
 	env -u GETDR_KEY -u AHREFS_KEY PATH='$clean_path' GETDR_API='$API' '$dr' -f '$tmp/list.txt' 2>/dev/null |
 	jq -e -s 'all(.[]; .cached == true)' >/dev/null"
@@ -264,7 +264,7 @@ for m in api bin direct; do
 	printf 'b.example\n' | run "$m" "$m-sepdash" -- - a.example
 	run "$m" "$m-crlf" -f "$tmp/crlf.txt"
 	run "$m" "$m-raw" --raw " HTTPS://WWW.Raw.example/P " raw.example
-	run "$m" "$m-fresh" --fresh a.example --version=dr4
+	run "$m" "$m-fresh" --fresh a.example --version=dr3
 	run "$m" "$m-sep" -- a.example
 done
 for c in args stdin dash bare sepdash crlf raw fresh sep; do
@@ -289,8 +289,8 @@ check "api-acc: same stderr as the binary" cmp -s <(errlines api-acc) <(errlines
 check "acc: one line for the IDN, in Unicode" jq -e -s '[.[].target] == ["ahrefs.com", "exa mple.com", "localhost", "github.com", "пример.рф"]' "$tmp/direct-acc.out"
 for m in api bin direct; do
 	check "$m-acc: invalid targets have dr and checked_at null and error" jq -e -s '[.[] | select(.error)] == [
-		{target: "exa mple.com", dr: null, version: "dr3", checked_at: null, cached: false, error: "invalid target"},
-		{target: "localhost", dr: null, version: "dr3", checked_at: null, cached: false, error: "invalid target"}]' "$tmp/$m-acc.out"
+		{target: "exa mple.com", dr: null, version: "dr4", checked_at: null, cached: false, error: "invalid target"},
+		{target: "localhost", dr: null, version: "dr4", checked_at: null, cached: false, error: "invalid target"}]' "$tmp/$m-acc.out"
 done
 for m in api bin direct; do
 	check "$m-acc: invalid-target lines" cmp -s <(errlines "$m-acc") <(printf 'getdr: invalid target: exa mple.com\ngetdr: invalid target: localhost\n')
@@ -307,21 +307,21 @@ run api api-big -f "$tmp/big.txt"
 same api-big direct-big
 check "direct: 3 POST requests for 2500 targets" bash -c "[ \$(grep -c '^URL ' '$tmp/curl.log') = 3 ]"
 check "direct: only api.ahrefs.com contacted" bash -c "! grep '^URL ' '$tmp/curl.log' | grep -v '^URL http://127.0.0.1:$p_ahrefs/v3/public/domain-rating-free?output=json$'"
-check "direct: User-Agent getdr/0.2.1" bash -c "! grep '^UA ' '$tmp/curl.log' | grep -v '^UA getdr/0.2.1 (+https://index-pages.com/getdr/)$'"
+check "direct: User-Agent getdr/0.3.0" bash -c "! grep '^UA ' '$tmp/curl.log' | grep -v '^UA getdr/0.3.0 (+https://index-pages.com/getdr/)$'"
 
 echo "== DR version from the server or config when not given"
 : >"$tmp/curl.log"
 rc=0
-env -u GETDR_KEY -u AHREFS_KEY -u GETDR_SERVE_TOKEN PATH="$clean_path" GETDR_API="$API4" "$dr" a.example 'exa mple.com' \
-	>"$tmp/api-v4.out" 2>/dev/null || rc=$?
-check "api: no --version, the server's dr4 applies" jq -e -s '[.[].version] == ["dr4", "dr4"]' "$tmp/api-v4.out"
-printf 'api = "%s"\nversion = "dr4"\n' "$API" >"$tmp/v4.toml"
-env -u GETDR_KEY -u AHREFS_KEY -u GETDR_API -u GETDR_SERVE_TOKEN PATH="$tmp/bin:$clean_path" GETDR_CONFIG="$tmp/v4.toml" \
-	GETDR_CACHE_PATH="$tmp/v4.db" "$dr" a.example >"$tmp/bin-v4.out" 2>/dev/null || true
-check "binary: no --version, the config's dr4 applies" jq -e '.version == "dr4"' "$tmp/bin-v4.out"
+env -u GETDR_KEY -u AHREFS_KEY -u GETDR_SERVE_TOKEN PATH="$clean_path" GETDR_API="$API3" "$dr" a.example 'exa mple.com' \
+	>"$tmp/api-v3.out" 2>/dev/null || rc=$?
+check "api: no --version, the server's dr3 applies" jq -e -s '[.[].version] == ["dr3", "dr3"]' "$tmp/api-v3.out"
+printf 'api = "%s"\nversion = "dr3"\n' "$API" >"$tmp/v3.toml"
+env -u GETDR_KEY -u AHREFS_KEY -u GETDR_API -u GETDR_SERVE_TOKEN PATH="$tmp/bin:$clean_path" GETDR_CONFIG="$tmp/v3.toml" \
+	GETDR_CACHE_PATH="$tmp/v3.db" "$dr" a.example >"$tmp/bin-v3.out" 2>/dev/null || true
+check "binary: no --version, the config's dr3 applies" jq -e '.version == "dr3"' "$tmp/bin-v3.out"
 run direct direct-v a.example
-check "direct: no --version is dr3" jq -e '.version == "dr3"' "$tmp/direct-v.out"
-check "api: --version dr3 still wins over the server" bash -c "GETDR_API='$API4' env -u GETDR_KEY -u AHREFS_KEY PATH='$clean_path' '$dr' --version dr3 a.example | jq -e '.version == \"dr3\"' >/dev/null"
+check "direct: no --version is dr4" jq -e '.version == "dr4"' "$tmp/direct-v.out"
+check "api: --version dr4 still wins over the server" bash -c "GETDR_API='$API3' env -u GETDR_KEY -u AHREFS_KEY PATH='$clean_path' '$dr' --version dr4 a.example | jq -e '.version == \"dr4\"' >/dev/null"
 
 # --- 2. errors and exit codes -----------------------------------------------
 
@@ -423,7 +423,7 @@ echo "== install.sh"
 case $(uname -s) in Linux) os=linux ;; Darwin) os=darwin ;; *) os=unknown ;; esac
 case $(uname -m) in x86_64 | amd64) arch=amd64 ;; aarch64 | arm64) arch=arm64 ;; *) arch=unknown ;; esac
 mkdir -p "$tmp/release" "$tmp/ishim"
-archive=getdr_0.2.1_${os}_${arch}.tar.gz
+archive=getdr_0.3.0_${os}_${arch}.tar.gz
 tar -czf "$tmp/release/$archive" -C "$tmp/bin" getdr
 (cd "$tmp/release" && { sha256sum "$archive" 2>/dev/null || shasum -a 256 "$archive"; } >checksums.txt)
 cat >"$tmp/ishim/curl" <<EOF
@@ -434,14 +434,14 @@ while [ \$# -gt 0 ]; do
 	shift
 done
 printf '%s\n' "\$url" >>"$tmp/install.log"
-case \$url in https://github.com/index-pages/getdr/releases/download/v0.2.1/*) ;; *) exit 22 ;; esac
+case \$url in https://github.com/index-pages/getdr/releases/download/v0.3.0/*) ;; *) exit 22 ;; esac
 cp "$tmp/release/\${url##*/}" "\$out" 2>/dev/null || exit 22
 EOF
 chmod +x "$tmp/ishim/curl"
 irun() { PATH="$tmp/ishim:$clean_path" PREFIX="$tmp/prefix" "$here/scripts/install.sh" "$@" >"$tmp/install.out" 2>&1; }
 check "install.sh: installs the binary" irun
 check "install.sh: binary in \$PREFIX/bin, executable, identical" bash -c "[ -x '$tmp/prefix/bin/getdr' ] && cmp -s '$tmp/prefix/bin/getdr' '$tmp/bin/getdr'"
-check "install.sh: only the release URLs fetched" bash -c "[ \$(grep -vc '^https://github.com/index-pages/getdr/releases/download/v0.2.1/' '$tmp/install.log') = 0 ]"
+check "install.sh: only the release URLs fetched" bash -c "[ \$(grep -vc '^https://github.com/index-pages/getdr/releases/download/v0.3.0/' '$tmp/install.log') = 0 ]"
 rm -f "$tmp/prefix/bin/getdr"
 echo "0000000000000000000000000000000000000000000000000000000000000000  $archive" >"$tmp/release/checksums.txt"
 check "install.sh: refuses a checksum mismatch" bash -c "! PATH='$tmp/ishim:$clean_path' PREFIX='$tmp/prefix' '$here/scripts/install.sh' >/dev/null 2>&1"

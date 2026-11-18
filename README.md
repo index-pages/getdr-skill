@@ -28,16 +28,16 @@ to `~/.local/bin` (or `$PREFIX/bin`); it runs nothing it downloads. Other ways t
 ## Use
 
 ```sh
-scripts/dr.sh saas.com
+scripts/dr.sh index-pages.com
 scripts/dr.sh https://www.example.com/page a.com b.com
 scripts/dr.sh -f domains.txt
 printf '%s\n' a.com b.com | scripts/dr.sh
-scripts/dr.sh --version dr4 --fresh saas.com
+scripts/dr.sh --version dr3 --fresh index-pages.com
 ```
 
 Flags: `-f FILE` (one target per line, blank and `#` lines skipped, `-` for stdin; a bare `-` argument
-reads stdin in its place), `--version dr3|dr4` (default: the config of the backend in use – the getdr
-server with `GETDR_API`, otherwise the binary's own config, also when it uses a server – and `dr3` on the
+reads stdin in its place), `--version dr4|dr3` (default: the config of the backend in use – the getdr
+server with `GETDR_API`, otherwise the binary's own config, also when it uses a server – and `dr4` on the
 direct path), `--fresh` (bypass caches), `--raw` (no target normalization), `-h`.
 
 Targets are normalized exactly like getdr does: a URL becomes its host, userinfo and port are dropped,
@@ -73,14 +73,14 @@ One JSON object per target on stdout, the same object as `getdr --format json`, 
 the getdr MCP server:
 
 ```json
-{"target":"saas.com","dr":49,"version":"dr3","checked_at":"2026-10-28T12:00:00Z","cached":false}
+{"target":"index-pages.com","dr":69,"version":"dr4","checked_at":"2026-11-19T12:00:00Z","cached":false}
 ```
 
 | field | |
 |---|---|
 | `target` | normalized target (as given with `--raw`) |
 | `dr` | number, or `null` for an invalid target, no response or no data; Ahrefs answers `0` for unknown domains |
-| `version` | `dr3` or `dr4`; the two formulas give values that are not comparable |
+| `version` | `dr4` or `dr3`; the two formulas give values that are not comparable |
 | `checked_at` | RFC 3339 UTC; `null` only for an invalid target or no response |
 | `cached` | `true` when served from a getdr cache; always `false` on the direct path |
 | `error` | only on an invalid target: `"invalid target"`; no other line has it |
@@ -101,7 +101,7 @@ getdr is not affiliated with Ahrefs.
 
 `scripts/dr.sh` connects to `GETDR_API` or `api.ahrefs.com` and nowhere else; `scripts/install.sh` only
 to the release download URL. No telemetry, no update checks, no analytics. Requests carry the User-Agent
-`getdr/0.2.1 (+https://index-pages.com/getdr/)`. Keys and tokens are passed to curl in a temporary file
+`getdr/0.3.0 (+https://index-pages.com/getdr/)`. Keys and tokens are passed to curl in a temporary file
 (mode 600), never on the command line. curl honours the standard `HTTP_PROXY`, `HTTPS_PROXY` and
 `NO_PROXY` environment variables; if you use a proxy and a getdr server on your LAN, add the server to
 `NO_PROXY`.
